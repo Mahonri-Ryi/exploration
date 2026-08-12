@@ -1,0 +1,145 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --ok: #4ade80;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: radial-gradient(1200px 600px at 50% -10%, #1e293b, var(--bg));
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 3rem 1rem;
+}
+
+.app {
+  width: 100%;
+  max-width: 640px;
+}
+
+.app__header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: 2.25rem;
+  letter-spacing: -0.02em;
+}
+
+.app__subtitle {
+  color: var(--muted);
+  margin: 0.35rem 0 0.75rem;
+}
+
+.app__health {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--panel);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+}
+
+.app__health.ok {
+  color: var(--ok);
+}
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.composer__input {
+  flex: 1;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--panel-2);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.composer__input:focus {
+  outline: 2px solid var(--accent);
+  border-color: transparent;
+}
+
+.composer__button {
+  padding: 0.85rem 1.25rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--accent-strong);
+  color: #041722;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.composer__button:hover {
+  background: var(--accent);
+}
+
+.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.note {
+  background: var(--panel);
+  border: 1px solid var(--panel-2);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  animation: pop 0.15s ease;
+}
+
+.note__text {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.note__meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.notes__empty {
+  text-align: center;
+  color: var(--muted);
+  margin-top: 1.5rem;
+}
+
+.notes__empty.hidden {
+  display: none;
+}
+
+@keyframes pop {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

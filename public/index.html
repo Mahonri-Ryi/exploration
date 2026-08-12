@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exploration Notes</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <h1>Exploration Notes</h1>
+        <p class="app__subtitle">A tiny full-stack demo used to verify the dev environment.</p>
+        <p class="app__health" id="health">checking API…</p>
+      </header>
+
+      <form class="composer" id="composer">
+        <input
+          id="note-input"
+          class="composer__input"
+          type="text"
+          placeholder="Write something to explore…"
+          autocomplete="off"
+        />
+        <button class="composer__button" type="submit">Add note</button>
+      </form>
+
+      <ul class="notes" id="notes"></ul>
+      <p class="notes__empty" id="empty">No notes yet. Add your first one above.</p>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
