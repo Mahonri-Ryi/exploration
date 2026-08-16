@@ -47,6 +47,7 @@ export class World {
   readonly moon: THREE.DirectionalLight;
   readonly water: THREE.Mesh;
   readonly waterBed: THREE.Mesh;
+  readonly waterFoam: THREE.Mesh;
   readonly ghost: THREE.Group;
   readonly hover: THREE.Mesh;
   readonly buildings = new Map<string, THREE.Group>();
@@ -183,7 +184,6 @@ export class World {
         time: { value: 0 },
         deep: { value: new THREE.Color(0x057a9c) },
         shallow: { value: new THREE.Color(0xa8fbff) },
-        foam: { value: new THREE.Color(0xe8fbff) },
       },
       vertexShader: `
         uniform float time;
@@ -200,20 +200,14 @@ export class World {
       fragmentShader: `
         uniform vec3 deep;
         uniform vec3 shallow;
-        uniform vec3 foam;
         uniform float time;
         varying vec2 vUv;
         varying vec3 vWorld;
         void main() {
           float n = sin(vWorld.x * 3.4 + time * 1.8) * 0.5 + cos(vWorld.z * 3.1 - time * 1.4) * 0.5;
-          float tile = 2.0;
-          float lx = abs(fract(vWorld.x / tile + 0.5) - 0.5) * 2.0;
-          float lz = abs(fract(vWorld.z / tile + 0.5) - 0.5) * 2.0;
-          float rim = smoothstep(0.72, 0.98, max(lx, lz));
-          vec3 col = mix(deep, shallow, 0.45 + n * 0.3);
-          col = mix(col, foam, rim * 0.85);
+          vec3 col = mix(deep, shallow, 0.42 + n * 0.32);
           float spark = pow(max(0.0, sin(vWorld.x * 7.5 + vWorld.z * 5.5 + time * 3.2)), 14.0);
-          col += spark * 0.55;
+          col += spark * 0.45;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
@@ -223,6 +217,13 @@ export class World {
     waterMat.toneMapped = false;
     waterMat.side = THREE.DoubleSide;
     this.scene.add(this.water);
+
+    this.waterFoam = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshBasicMaterial({ color: 0xd9f7fb, toneMapped: false }),
+    );
+    this.waterFoam.renderOrder = 2;
+    this.scene.add(this.waterFoam);
 
     this.scene.add(this.roadGroup);
     this.scene.add(this.buildGroup);
@@ -326,12 +327,38 @@ export class World {
       );
       uv.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
     };
+    const foamPos: number[] = [];
+    const foamUv: number[] = [];
+    const pushStrip = (
+      ax: number, ay: number, az: number,
+      bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number,
+      dx: number, dy: number, dz: number,
+    ) => {
+      foamPos.push(ax, ay, az, bx, by, bz, cx, cy, cz, ax, ay, az, cx, cy, cz, dx, dy, dz);
+      foamUv.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+    };
     for (let y = 0; y < city.size; y++) {
       for (let x = 0; x < city.size; x++) {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
         pushQuad(bedPos, bedUv, p.x, 0.02, p.z, TILE * 0.55);
         pushQuad(positions, uvs, p.x, 0.18, p.z, TILE * 0.515);
+        const s = TILE * 0.515;
+        const band = 0.16;
+        const fy = 0.2;
+        if (!isWaterTile(x, y - 1, city.size)) {
+          pushStrip(p.x - s, fy, p.z - s, p.x + s, fy, p.z - s, p.x + s, fy, p.z - s + band, p.x - s, fy, p.z - s + band);
+        }
+        if (!isWaterTile(x, y + 1, city.size)) {
+          pushStrip(p.x - s, fy, p.z + s - band, p.x + s, fy, p.z + s - band, p.x + s, fy, p.z + s, p.x - s, fy, p.z + s);
+        }
+        if (!isWaterTile(x - 1, y, city.size)) {
+          pushStrip(p.x - s, fy, p.z - s, p.x - s + band, fy, p.z - s, p.x - s + band, fy, p.z + s, p.x - s, fy, p.z + s);
+        }
+        if (!isWaterTile(x + 1, y, city.size)) {
+          pushStrip(p.x + s - band, fy, p.z - s, p.x + s, fy, p.z - s, p.x + s, fy, p.z + s, p.x + s - band, fy, p.z + s);
+        }
       }
     }
     waterGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -347,6 +374,13 @@ export class World {
     bedGeom.computeVertexNormals();
     this.waterBed.geometry.dispose();
     this.waterBed.geometry = bedGeom;
+
+    const foamGeom = new THREE.BufferGeometry();
+    foamGeom.setAttribute("position", new THREE.Float32BufferAttribute(foamPos, 3));
+    foamGeom.setAttribute("uv", new THREE.Float32BufferAttribute(foamUv, 2));
+    foamGeom.computeVertexNormals();
+    this.waterFoam.geometry.dispose();
+    this.waterFoam.geometry = foamGeom;
   }
 
   private scatterWilds(city: City): void {
@@ -558,29 +592,34 @@ export class World {
     const g = new THREE.Group();
     const colors = [0xc45c4a, 0x2c3d5a, 0xc9a227, 0xe8e4dc, 0x3d7a4a];
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.12, 0.42),
+      new THREE.BoxGeometry(0.18, 0.11, 0.52),
       new THREE.MeshStandardMaterial({ color: colors[seed % colors.length], metalness: 0.4, roughness: 0.35 }),
     );
-    body.position.y = 0.08;
+    body.position.y = 0.09;
     body.castShadow = true;
     const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.1, 0.2),
+      new THREE.BoxGeometry(0.16, 0.1, 0.18),
       new THREE.MeshStandardMaterial({ color: 0x89c2d4, metalness: 0.3, roughness: 0.15 }),
     );
-    cabin.position.set(0, 0.16, -0.06);
+    cabin.position.set(0, 0.17, -0.04);
+    const nose = new THREE.Mesh(
+      new THREE.BoxGeometry(0.14, 0.04, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0xf2d48a, metalness: 0.5, roughness: 0.3 }),
+    );
+    nose.position.set(0, 0.08, -0.28);
     const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
     const wheelGeo = new THREE.BoxGeometry(0.06, 0.06, 0.09);
     for (const [x, z] of [
-      [-0.12, 0.12],
-      [0.12, 0.12],
-      [-0.12, -0.12],
-      [0.12, -0.12],
+      [-0.1, 0.16],
+      [0.1, 0.16],
+      [-0.1, -0.16],
+      [0.1, -0.16],
     ] as const) {
       const wheel = new THREE.Mesh(wheelGeo, wheelMat);
       wheel.position.set(x, 0.03, z);
       g.add(wheel);
     }
-    g.add(body, cabin);
+    g.add(body, cabin, nose);
     return g;
   }
 
