@@ -142,6 +142,26 @@ describe("utilities and economy", () => {
     expect(city.get(x + 2, y)!.powered).toBe(true);
   });
 
+  it("powers a home across a modest gap from the plant", () => {
+    const city = new City(24, "Test");
+    city.money = 200000;
+    let x = 6;
+    let y = 8;
+    for (let yy = 5; yy < 16; yy++) {
+      for (let xx = 5; xx < 12; xx++) {
+        if (!city.get(xx, yy)?.water && !city.get(xx + 8, yy)?.water) {
+          x = xx;
+          y = yy;
+          break;
+        }
+      }
+    }
+    city.place("power", x, y);
+    city.place("cottage", x + 8, y);
+    city.floodUtilities();
+    expect(city.get(x + 8, y)!.powered).toBe(true);
+  });
+
   it("treats diagonal tiles as road-adjacent", () => {
     const city = new City(16, "Test");
     city.money = 50000;

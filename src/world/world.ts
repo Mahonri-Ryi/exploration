@@ -155,11 +155,11 @@ export class World {
     this.scene.add(grid);
 
     const waterMat = new THREE.ShaderMaterial({
-      transparent: true,
+      transparent: false,
       uniforms: {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x0c3a4a) },
-        shallow: { value: new THREE.Color(0x2f8fa3) },
+        deep: { value: new THREE.Color(0x0a6f8c) },
+        shallow: { value: new THREE.Color(0x5ee0ea) },
       },
       vertexShader: `
         uniform float time;
@@ -178,8 +178,8 @@ export class World {
         varying vec2 vUv;
         void main() {
           float n = sin(vUv.x * 40.0 + time) * 0.5 + cos(vUv.y * 36.0 - time * 0.8) * 0.5;
-          vec3 col = mix(deep, shallow, 0.45 + n * 0.12);
-          gl_FragColor = vec4(col, 0.88);
+          vec3 col = mix(deep, shallow, 0.55 + n * 0.2);
+          gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
@@ -273,7 +273,7 @@ export class World {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
         const s = TILE * 0.52;
-        const y0 = 0.03;
+        const y0 = 0.12;
         const quad = [
           [p.x - s, y0, p.z - s],
           [p.x + s, y0, p.z - s],

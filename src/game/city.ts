@@ -225,7 +225,7 @@ export class City {
       if (def.powerGen <= 0 && def.waterGen <= 0) continue;
       for (const t of this.tiles) {
         const dist = Math.abs(t.x - src.x) + Math.abs(t.y - src.y);
-        if (dist > 4) continue;
+        if (dist > 12) continue;
         if (!t.road && !t.buildingId) continue;
         if (def.powerGen > 0) t.powered = true;
         if (def.waterGen > 0) t.watered = true;

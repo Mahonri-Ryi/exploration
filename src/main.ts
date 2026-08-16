@@ -153,6 +153,13 @@ function applyTool(x: number, y: number): void {
   world.syncTile(city, x, y);
   audio.play(def.isRoad ? "place" : "construction");
   hud.lockTools(city.population());
+  if (!def.isRoad) {
+    const tile = city.get(x, y)!;
+    city.floodUtilities();
+    if (!city.hasRoadAccess(x, y)) toast("This plot has no avenue. It will sit idle.");
+    else if (def.powerUse > 0 && !tile.powered) toast("No power reaches this plot yet.");
+    else if (def.waterUse > 0 && !tile.watered) toast("No water reaches this plot yet.");
+  }
 }
 
 canvas.addEventListener("pointermove", (e) => {
@@ -260,6 +267,10 @@ declare global {
       stats: () => ReturnType<City["stats"]>;
       running: () => boolean;
       tool: () => ToolId;
+      startNew: (name?: string) => void;
+      place: (id: string, x: number, y: number) => boolean;
+      demolish: (x: number, y: number) => boolean;
+      tick: (n?: number) => void;
     };
   }
 }
@@ -268,4 +279,22 @@ window.__AETHERIS__ = {
   stats: () => city.stats(),
   running: () => running,
   tool: () => tool,
+  startNew: (name = "Aetheris") => {
+    startCity(new City(40, name));
+  },
+  place: (id, x, y) => {
+    const ok = city.place(id, x, y);
+    if (ok) world.syncTile(city, x, y);
+    return ok;
+  },
+  demolish: (x, y) => {
+    const res = city.demolish(x, y);
+    if (res.ok) world.syncTile(city, x, y);
+    return res.ok;
+  },
+  tick: (n = 1) => {
+    for (let i = 0; i < n; i++) city.tick();
+    hud.update(city, city.stats());
+    hud.lockTools(city.population());
+  },
 };
