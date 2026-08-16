@@ -259,4 +259,59 @@ describe("utilities and economy", () => {
     expect(loaded.get(x, y)?.road).toBe(true);
     expect(loaded.money).toBe(city.money);
   });
+
+  it("spans water with a bridge joined to an avenue", () => {
+    const city = new City(24, "Test");
+    city.money = 50000;
+    let land = { x: 0, y: 0 };
+    let water = { x: 0, y: 0 };
+    outer: for (let y = 2; y < 22; y++) {
+      for (let x = 2; x < 22; x++) {
+        const t = city.get(x, y)!;
+        if (t.water) continue;
+        const n = city.neighbors4(x, y).find((q) => q.water);
+        if (n) {
+          land = { x, y };
+          water = { x: n.x, y: n.y };
+          break outer;
+        }
+      }
+    }
+    expect(city.canPlace("road", water.x, water.y).ok).toBe(false);
+    expect(city.place("road", land.x, land.y)).toBe(true);
+    expect(city.place("road", water.x, water.y)).toBe(true);
+    expect(city.get(water.x, water.y)?.road).toBe(true);
+    expect(city.get(water.x, water.y)?.water).toBe(true);
+    const loaded = City.deserialize(city.serialize());
+    expect(loaded.get(water.x, water.y)?.road).toBe(true);
+  });
+
+  it("upgrades a cottage into a villa and docks must face water", () => {
+    const city = new City(20, "Test");
+    city.money = 200000;
+    const { x, y } = emptyLand(city);
+    expect(city.place("cottage", x, y)).toBe(true);
+    const up = city.upgrade(x, y);
+    expect(up.ok).toBe(true);
+    expect(city.get(x, y)?.buildingId).toBe("villa");
+    let inland = { x: 2, y: 2 };
+    for (let yy = 2; yy < 18; yy++) {
+      for (let xx = 2; xx < 18; xx++) {
+        const t = city.get(xx, yy)!;
+        if (!t.water && !t.buildingId && !city.neighbors4(xx, yy).some((n) => n.water)) {
+          inland = { x: xx, y: yy };
+        }
+      }
+    }
+    expect(city.canPlace("dock", inland.x, inland.y).ok).toBe(false);
+  });
+
+  it("pays a charter reward for the first avenue", () => {
+    const city = new City(16, "Test");
+    const before = city.money;
+    const { x, y } = emptyLand(city);
+    city.place("road", x, y);
+    expect(city.completedMissions.has("avenue")).toBe(true);
+    expect(city.money).toBeGreaterThan(before - 25);
+  });
 });

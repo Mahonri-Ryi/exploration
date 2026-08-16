@@ -251,6 +251,26 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
       g.add(place(box(0.55, 0.45, 0.22, dark), 0, 0.72));
       break;
     }
+    case "dock": {
+      const plank = mat("plank", () => new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.85 }));
+      g.add(box(1.8, 0.1, 1.5, plank));
+      g.add(place(box(0.12, 0.55, 1.5, plank), -0.75, 0));
+      g.add(place(box(0.12, 0.55, 1.5, plank), 0.75, 0));
+      const hull = mat("hull", () => new THREE.MeshStandardMaterial({ color: 0xcfc4b0, roughness: 0.5 }));
+      g.add(place(box(0.55, 0.22, 1.1, hull, 0.12), 0.15, 0.15));
+      g.add(place(cyl(0.03, 0.03, 0.7, dark, 0.3, 6), 0.15, -0.2));
+      break;
+    }
+    case "school": {
+      g.add(box(1.6, 1.35, 1.35, facade));
+      g.add(box(0.7, 0.85, 0.7, facade, 1.35));
+      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), trim);
+      bell.position.y = 2.35;
+      g.add(bell);
+      g.add(cyl(0.04, 0.04, 0.25, trim, 2.28, 8));
+      addTree(g, foliage, dark, -0.7, 0.55, rng);
+      break;
+    }
     default: {
       g.add(box(1.2, Math.max(0.4, def.height * 0.35), 1.2, facade));
     }

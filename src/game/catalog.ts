@@ -26,11 +26,12 @@ export interface BuildingDef {
   serviceRadius: number;
   parkValue: number;
   unique?: boolean;
-  isRoad?: boolean;
-  color: number;
-  height: number;
-  unlockPop: number;
-}
+    isRoad?: boolean;
+    color: number;
+    height: number;
+    unlockPop: number;
+    waterfront?: boolean;
+  }
 
 export const CATALOG: BuildingDef[] = [
   {
@@ -308,6 +309,49 @@ export const CATALOG: BuildingDef[] = [
     unlockPop: 150,
   },
   {
+    id: "dock",
+    name: "River Dock",
+    category: "commercial",
+    cost: 1600,
+    upkeep: 18,
+    description: "Must face water. Traders pay dues each month.",
+    icon: "icon-dock.png",
+    residents: 0,
+    jobs: 10,
+    powerUse: 2,
+    waterUse: 1,
+    powerGen: 0,
+    waterGen: 0,
+    pollution: 1,
+    serviceRadius: 0,
+    parkValue: 0,
+    waterfront: true,
+    color: 0x8a5a32,
+    height: 0.7,
+    unlockPop: 0,
+  },
+  {
+    id: "school",
+    name: "Academy",
+    category: "service",
+    cost: 3800,
+    upkeep: 42,
+    description: "A school that draws families and lifts nearby spirit.",
+    icon: "icon-school.png",
+    residents: 0,
+    jobs: 14,
+    powerUse: 6,
+    waterUse: 4,
+    powerGen: 0,
+    waterGen: 0,
+    pollution: 0,
+    serviceRadius: 8,
+    parkValue: 3,
+    color: 0xc9b07a,
+    height: 1.9,
+    unlockPop: 25,
+  },
+  {
     id: "power",
     name: "Power Plant",
     category: "utility",
@@ -455,6 +499,8 @@ export const TOOL_ORDER = [
   "plant",
   "park",
   "plaza",
+  "dock",
+  "school",
   "power",
   "water",
   "police",

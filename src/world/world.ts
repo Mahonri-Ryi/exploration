@@ -389,6 +389,7 @@ export class World {
   }
 
   private ensureRoad(city: City, x: number, y: number): void {
+    const tile = city.get(x, y);
     const p = tileToWorld(x, y, city.size);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x5a5e66,
@@ -396,9 +397,24 @@ export class World {
       roughness: 0.62,
       metalness: 0.08,
     });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.98, 0.1, TILE * 0.98), mat);
-    mesh.position.set(p.x, 0.06, p.z);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.98, tile?.water ? 0.16 : 0.1, TILE * 0.98), mat);
+    mesh.position.set(p.x, tile?.water ? 0.22 : 0.06, p.z);
     mesh.receiveShadow = true;
+    mesh.castShadow = Boolean(tile?.water);
+    if (tile?.water) {
+      mat.color.set(0x8d6b4a);
+      mat.map = null;
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(TILE * 0.92, 0.12, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.45, roughness: 0.35 }),
+      );
+      rail.position.y = 0.14;
+      mesh.add(rail);
+      const rail2 = rail.clone();
+      rail2.position.z = 0;
+      rail2.rotation.y = Math.PI / 2;
+      mesh.add(rail2);
+    }
     const n = city.get(x, y - 1)?.road;
     const s = city.get(x, y + 1)?.road;
     const e = city.get(x + 1, y)?.road;
@@ -435,6 +451,14 @@ export class World {
       const mesh = this.makeCar(i);
       this.scene.add(mesh);
       this.cars.push({ mesh, path, i: 0, t: Math.random(), speed: 1.4 + Math.random() * 1.1 });
+    }
+    const walkers = Math.min(16, Math.floor(nodes.length / 4));
+    for (let i = 0; i < walkers; i++) {
+      const path = this.randomPath(city, nodes);
+      if (path.length < 2) continue;
+      const mesh = this.makePerson(i);
+      this.scene.add(mesh);
+      this.cars.push({ mesh, path, i: 0, t: Math.random(), speed: 0.45 + Math.random() * 0.25 });
     }
   }
 
@@ -473,6 +497,24 @@ export class World {
     );
     cabin.position.set(-0.02, 0.16, 0);
     g.add(body, cabin);
+    return g;
+  }
+
+  private makePerson(seed: number): THREE.Group {
+    const g = new THREE.Group();
+    const hues = [0xc45c4a, 0x2c3d5a, 0xe8e4dc, 0x3d7a4a, 0xc9a227];
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.05, 0.12, 4, 6),
+      new THREE.MeshStandardMaterial({ color: hues[seed % hues.length], roughness: 0.7 }),
+    );
+    body.position.y = 0.14;
+    body.castShadow = true;
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.045, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xe0c4a8, roughness: 0.8 }),
+    );
+    head.position.y = 0.26;
+    g.add(body, head);
     return g;
   }
 
@@ -559,5 +601,38 @@ export class World {
     const phase = city.dayPhase();
     const elev = Math.sin(phase * Math.PI * 2 - Math.PI / 2);
     return THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
+  }
+
+  drawMinimap(canvas: HTMLCanvasElement, city: City): void {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const s = city.size;
+    if (canvas.width !== s) {
+      canvas.width = s;
+      canvas.height = s;
+    }
+    ctx.fillStyle = "#1c2418";
+    ctx.fillRect(0, 0, s, s);
+    for (const t of city.tiles) {
+      if (t.water && !t.road) ctx.fillStyle = "#2aa0b8";
+      else if (t.road) ctx.fillStyle = t.water ? "#c9a227" : "#5a5e66";
+      else if (!t.buildingId) continue;
+      else {
+        const def = CATALOG_BY_ID[t.buildingId];
+        ctx.fillStyle =
+          def?.category === "residential"
+            ? "#d4a017"
+            : def?.category === "commercial"
+              ? "#c45c4a"
+              : def?.category === "industrial"
+                ? "#6b5a4a"
+                : def?.category === "civic"
+                  ? "#3d7a4a"
+                  : def?.category === "utility"
+                    ? "#3ad4c8"
+                    : "#c9a227";
+      }
+      ctx.fillRect(t.x, t.y, 1, 1);
+    }
   }
 }

@@ -8,6 +8,7 @@ export interface HudHandlers {
   onMute: () => void;
   onSave: () => void;
   onMenu: () => void;
+  onUpgrade: (x: number, y: number) => void;
 }
 
 const ICONS: Record<string, string> = {
@@ -56,6 +57,11 @@ export class Hud {
       </header>
       <aside class="toolbar" id="toolbar"></aside>
       <section class="inspect" id="inspect-panel" hidden></section>
+      <section class="charter" id="charter">
+        <h3>Charter</h3>
+        <ol id="charter-list"></ol>
+        <canvas id="minimap" width="40" height="40" aria-label="Minimap"></canvas>
+      </section>
       <footer class="bottom">
         <div class="demand">
           <label>R <i id="bar-r"></i></label>
@@ -112,8 +118,9 @@ export class Hud {
     });
     const def = CATALOG_BY_ID[id];
     const hint = this.root.querySelector("#hint")!;
-    if (id === "inspect") hint.textContent = "Survey a district to read its fortunes.";
+    if (id === "inspect") hint.textContent = "Survey a plot. Press U to upgrade a building.";
     else if (id === "bulldoze") hint.textContent = "Raze a structure. The treasury recovers 40%.";
+    else if (id === "road") hint.textContent = "Avenue: paint land, or span water as a gold bridge ($90).";
     else if (def) hint.textContent = `${def.name}: ${def.description}`;
   }
 
@@ -150,6 +157,24 @@ export class Hud {
     pwr.classList.toggle("bad", stats.powerDemand > stats.powerSupply);
     const wtr = this.root.querySelector("#stat-water")!;
     wtr.classList.toggle("bad", stats.waterDemand > stats.waterSupply);
+    this.renderCharter(city);
+  }
+
+  private renderCharter(city: City): void {
+    const list = this.root.querySelector("#charter-list");
+    if (!list) return;
+    const open = city.activeMissions();
+    list.innerHTML = open
+      .map(
+        (m) =>
+          `<li><strong>${m.title}</strong><span>${m.detail}</span><em>+$${m.reward.toLocaleString()}</em></li>`,
+      )
+      .join("");
+    if (!open.length) list.innerHTML = "<li><strong>Charter fulfilled.</strong><span>The city writes its own fate.</span></li>";
+  }
+
+  get minimap(): HTMLCanvasElement {
+    return this.root.querySelector("#minimap") as HTMLCanvasElement;
   }
 
   inspect(city: City, x: number, y: number): void {
@@ -163,17 +188,33 @@ export class Hud {
     const def = tile.buildingId ? city.def(tile.buildingId) : null;
     const cov = city.coverageAt(x, y);
     const access = city.hasRoadAccess(x, y);
+    const plan = def && !def.isRoad ? city.upgradeCostAt(x, y) : null;
+    const waterText = tile.water
+      ? tile.road
+        ? "A bridge spans the watercourse."
+        : "A watercourse. Paint an avenue from shore to raise a bridge."
+      : "A plot awaiting a purpose.";
     panel.innerHTML = `
-      <h3>${def ? def.name : tile.water ? "River" : "Open land"}</h3>
-      <p>${def ? def.description : tile.water ? "Unbuildable watercourse." : "A plot awaiting a purpose."}</p>
+      <h3>${tile.road && tile.water ? "Bridge" : def ? def.name : tile.water ? "River" : "Open land"}</h3>
+      <p>${def ? def.description : waterText}</p>
       <ul>
         <li>Parcel ${x}, ${y}</li>
         <li>Road ${access ? "connected" : "isolated"}</li>
         <li>Power ${tile.powered ? "live" : "dark"} · Water ${tile.watered ? "flowing" : "dry"}</li>
-        ${def ? `<li>Residents ${tile.residents}/${def.residents || 0} · Workers ${tile.workers}/${def.jobs || 0}</li>` : ""}
+        ${def && !def.isRoad ? `<li>Residents ${tile.residents}/${def.residents || 0} · Workers ${tile.workers}/${def.jobs || 0}</li>` : ""}
         <li>Park ${cov.park.toFixed(1)} · Watch ${cov.service.toFixed(1)} · Smoke ${cov.pollution.toFixed(1)}</li>
       </ul>
+      ${
+        plan
+          ? `<button class="upgrade" data-x="${x}" data-y="${y}">
+              <img src="./assets/icons/icon-upgrade.png" alt="" />
+              Raise to ${plan.name} · $${plan.cost.toLocaleString()}
+            </button>`
+          : ""
+      }
     `;
+    const btn = panel.querySelector(".upgrade") as HTMLButtonElement | null;
+    btn?.addEventListener("click", () => this.handlers.onUpgrade(x, y));
   }
 
   hideInspect(): void {

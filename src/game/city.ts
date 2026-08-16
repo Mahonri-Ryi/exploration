@@ -1,4 +1,5 @@
 import { CATALOG_BY_ID, isWaterTile, type BuildingDef } from "./catalog";
+import { BRIDGE_COST, MISSIONS, UPGRADE_OF, upgradeCost } from "./missions";
 
 export interface Tile {
   x: number;
@@ -37,7 +38,7 @@ export interface CityStats {
 }
 
 export interface CityEvent {
-  type: "milestone" | "budget" | "info";
+  type: "milestone" | "budget" | "info" | "mission" | "event";
   message: string;
 }
 
@@ -57,6 +58,9 @@ export interface SerializedCity {
     workers: number;
     age: number;
   }>;
+  completedMissions?: string[];
+  happyBoost?: number;
+  happyBoostUntil?: number;
 }
 
 const TICKS_PER_DAY = 24;
@@ -72,6 +76,9 @@ export class City {
   lastIncome = 0;
   lastExpenses = 0;
   events: CityEvent[] = [];
+  completedMissions = new Set<string>();
+  happyBoost = 0;
+  happyBoostUntil = 0;
   private milestones = new Set<number>();
 
   constructor(size = 40, name = "Aetheris") {
@@ -152,9 +159,16 @@ export class City {
     const tile = this.get(x, y);
     const def = this.def(id);
     if (!tile || !def) return { ok: false, reason: "Invalid tile." };
-    if (tile.water) return { ok: false, reason: "Cannot build on water." };
     if (tile.buildingId || tile.road) return { ok: false, reason: "Tile is occupied." };
-    if (this.money < def.cost) return { ok: false, reason: "The treasury cannot afford this." };
+    const cost = tile.water && def.isRoad ? BRIDGE_COST : def.cost;
+    if (tile.water && !def.isRoad) return { ok: false, reason: "Cannot build on water." };
+    if (tile.water && def.isRoad && !this.neighbors8(x, y).some((n) => n.road)) {
+      return { ok: false, reason: "Bridges must join an avenue." };
+    }
+    if (def.waterfront && !this.neighbors4(x, y).some((n) => n.water)) {
+      return { ok: false, reason: "Docks must face the river." };
+    }
+    if (this.money < cost) return { ok: false, reason: "The treasury cannot afford this." };
     if (def.unique && this.hasUnique(def.id)) return { ok: false, reason: "Only one City Hall may stand." };
     const pop = this.population();
     if (pop < def.unlockPop) {
@@ -168,7 +182,7 @@ export class City {
     if (!check.ok) return false;
     const def = this.def(id)!;
     const tile = this.get(x, y)!;
-    this.money -= def.cost;
+    this.money -= tile.water && def.isRoad ? BRIDGE_COST : def.cost;
     if (def.isRoad) {
       tile.road = true;
       tile.buildingId = "road";
@@ -179,6 +193,7 @@ export class City {
     tile.residents = 0;
     tile.workers = 0;
     this.floodUtilities();
+    this.collectMissions();
     return true;
   }
 
@@ -198,7 +213,57 @@ export class City {
     tile.age = 0;
     this.money += refund;
     this.floodUtilities();
+    this.collectMissions();
     return { ok: true, refund };
+  }
+
+  upgradeCostAt(x: number, y: number): { nextId: string; cost: number; name: string } | null {
+    const tile = this.get(x, y);
+    if (!tile?.buildingId) return null;
+    const nextId = UPGRADE_OF[tile.buildingId];
+    const from = this.def(tile.buildingId);
+    const to = nextId ? this.def(nextId) : undefined;
+    if (!from || !to) return null;
+    return { nextId, cost: upgradeCost(from.cost, to.cost), name: to.name };
+  }
+
+  upgrade(x: number, y: number): { ok: boolean; reason?: string; name?: string } {
+    const plan = this.upgradeCostAt(x, y);
+    const tile = this.get(x, y);
+    if (!plan || !tile) return { ok: false, reason: "Nothing here will rise further." };
+    const to = this.def(plan.nextId);
+    if (!to) return { ok: false, reason: "Nothing here will rise further." };
+    if (this.money < plan.cost) return { ok: false, reason: "The treasury cannot afford this." };
+    this.money -= plan.cost;
+    const keep = tile.residents;
+    tile.buildingId = plan.nextId;
+    tile.residents = Math.min(keep, to.residents);
+    tile.workers = 0;
+    tile.age = 0;
+    this.floodUtilities();
+    this.collectMissions();
+    return { ok: true, name: to.name };
+  }
+
+  activeMissions(): typeof MISSIONS {
+    return MISSIONS.filter((m) => !this.completedMissions.has(m.id)).slice(0, 4);
+  }
+
+  collectMissions(): CityEvent[] {
+    const found: CityEvent[] = [];
+    for (const mission of MISSIONS) {
+      if (this.completedMissions.has(mission.id)) continue;
+      if (!mission.check(this)) continue;
+      this.completedMissions.add(mission.id);
+      this.money += mission.reward;
+      const ev: CityEvent = {
+        type: "mission",
+        message: `Charter complete: ${mission.title}  ·  +$${mission.reward.toLocaleString()}`,
+      };
+      found.push(ev);
+      this.events.push(ev);
+    }
+    return found;
   }
 
   population(): number {
@@ -353,6 +418,7 @@ export class City {
       h -= Math.min(28, cov.pollution);
       if (!on) h -= 22;
       if (this.taxRate > 0.12) h -= (this.taxRate - 0.12) * 180;
+      if (this.tickCount < this.happyBoostUntil) h += this.happyBoost;
       h = Math.max(8, Math.min(100, h));
       happinessAcc += h;
       happyTiles += 1;
@@ -374,7 +440,10 @@ export class City {
 
     if (this.tickCount % TICKS_PER_DAY === 0 && this.dayOfMonth() === 0) {
       this.collectTaxes(happiness, employed);
+      this.rollEvent();
     }
+
+    this.collectMissions();
 
     const pop = this.population();
     for (const mark of [50, 150, 400, 800, 1500]) {
@@ -410,6 +479,8 @@ export class City {
         commercial += tile.workers * 5.4;
       } else if (def.category === "industrial") {
         industrial += tile.workers * 4.6;
+      } else if (def.id === "dock") {
+        commercial += this.operating(tile, def) ? 92 : 12;
       }
     }
     const income = Math.floor((residential + commercial + industrial) * this.taxRate * 18);
@@ -420,6 +491,38 @@ export class City {
       message: `Ledger closed: +$${income.toLocaleString()} income, −$${this.lastExpenses.toLocaleString()} upkeep.`,
     });
     void employed;
+  }
+
+  private rollEvent(): void {
+    if (this.population() < 8) return;
+    if (Math.random() > 0.38) return;
+    const roll = Math.random();
+    if (roll < 0.28) {
+      this.happyBoost = 14;
+      this.happyBoostUntil = this.tickCount + 40;
+      this.events.push({ type: "event", message: "Lanterns drift the river. Spirit lifts for a season." });
+    } else if (roll < 0.52) {
+      const purse = 900 + Math.floor(Math.random() * 1600);
+      this.money += purse;
+      this.events.push({ type: "event", message: `River traders pay harbor dues: +$${purse.toLocaleString()}.` });
+    } else if (roll < 0.74) {
+      let gained = 0;
+      for (const tile of this.tiles) {
+        const def = tile.buildingId ? this.def(tile.buildingId) : undefined;
+        if (!def?.residents || !this.operating(tile, def)) continue;
+        if (tile.residents < def.residents) {
+          tile.residents += 1;
+          gained += 1;
+        }
+      }
+      if (gained) {
+        this.events.push({ type: "event", message: `A generous harvest. ${gained} new souls arrive.` });
+      }
+    } else {
+      this.happyBoost = -10;
+      this.happyBoostUntil = this.tickCount + 28;
+      this.events.push({ type: "event", message: "A dry wind. The city drinks deeper and tempers fray." });
+    }
   }
 
   hour(): number {
@@ -527,6 +630,9 @@ export class City {
       money: this.money,
       taxRate: this.taxRate,
       tickCount: this.tickCount,
+      completedMissions: [...this.completedMissions],
+      happyBoost: this.happyBoost,
+      happyBoostUntil: this.happyBoostUntil,
       tiles: this.tiles
         .filter((t) => t.buildingId || t.road)
         .map((t) => ({
@@ -546,9 +652,13 @@ export class City {
     city.money = data.money;
     city.taxRate = data.taxRate;
     city.tickCount = data.tickCount;
+    city.completedMissions = new Set(data.completedMissions ?? []);
+    city.happyBoost = data.happyBoost ?? 0;
+    city.happyBoostUntil = data.happyBoostUntil ?? 0;
     for (const rec of data.tiles) {
       const tile = city.get(rec.x, rec.y);
-      if (!tile || tile.water) continue;
+      if (!tile) continue;
+      if (tile.water && !rec.road) continue;
       tile.buildingId = rec.buildingId;
       tile.road = rec.road;
       tile.residents = rec.residents;

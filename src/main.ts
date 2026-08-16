@@ -26,6 +26,7 @@ let acc = 0;
 let painting = false;
 let lastPaint = "";
 let running = false;
+let inspectAt: { x: number; y: number } | null = null;
 
 const hud = new Hud(hudRoot, {
   onTool: (id) => setTool(id),
@@ -50,6 +51,7 @@ const hud = new Hud(hudRoot, {
     running = false;
     refreshContinue();
   },
+  onUpgrade: (x, y) => tryUpgrade(x, y),
 });
 
 function setTool(id: ToolId): void {
@@ -57,6 +59,25 @@ function setTool(id: ToolId): void {
   hud.setTool(id);
   if (id !== "inspect") hud.hideInspect();
   audio.play("ui_click");
+}
+
+function tryUpgrade(x: number, y: number): void {
+  const res = city.upgrade(x, y);
+  if (!res.ok) {
+    audio.play("error");
+    if (res.reason) toast(res.reason);
+    return;
+  }
+  world.syncTile(city, x, y);
+  audio.play("unlock");
+  toast(`${res.name} rises on the plot.`);
+  for (const ev of city.events) {
+    if (ev.type !== "mission") continue;
+    toast(ev.message);
+    audio.play("unlock");
+  }
+  hud.inspect(city, x, y);
+  hud.lockTools(city.population());
 }
 
 function persist(message?: string): void {
@@ -72,6 +93,7 @@ function startCity(next: City): void {
   city = next;
   world.bindCity(city);
   hud.update(city, city.stats());
+  world.drawMinimap(hud.minimap, city);
   hud.lockTools(city.population());
   hud.setTool(tool);
   title.hidden = true;
@@ -126,6 +148,7 @@ function hoverTile(e: PointerEvent): { x: number; y: number } | null {
 
 function applyTool(x: number, y: number): void {
   if (tool === "inspect") {
+    inspectAt = { x, y };
     hud.inspect(city, x, y);
     audio.play("ui_hover");
     return;
@@ -153,6 +176,11 @@ function applyTool(x: number, y: number): void {
   world.syncTile(city, x, y);
   audio.play(def.isRoad ? "place" : "construction");
   hud.lockTools(city.population());
+  for (const ev of city.events) {
+    if (ev.type !== "mission") continue;
+    toast(ev.message);
+    audio.play("unlock");
+  }
   if (!def.isRoad) {
     const tile = city.get(x, y)!;
     city.floodUtilities();
@@ -222,6 +250,7 @@ window.addEventListener("keydown", (e) => {
     speed = speed === 0 ? 1 : 0;
     hud.setSpeed(speed);
   }
+  if (e.key.toLowerCase() === "u" && inspectAt) tryUpgrade(inspectAt.x, inspectAt.y);
   if (e.key.toLowerCase() === "r") cam.reset();
 });
 
@@ -239,14 +268,15 @@ function frame(now: number): void {
         const events = city.tick();
         for (const ev of events) {
           toast(ev.message);
-          if (ev.type === "milestone") audio.play("unlock");
-          if (ev.type === "budget") audio.play("coin");
+          if (ev.type === "milestone" || ev.type === "mission") audio.play("unlock");
+          if (ev.type === "budget" || ev.type === "event") audio.play("coin");
         }
         hud.lockTools(city.population());
       }
     }
     world.update(dt, city);
     hud.update(city, city.stats());
+    world.drawMinimap(hud.minimap, city);
     audio.setDayNight(world.nightAmount(city));
     if (city.tickCount % 40 === 0) saveCity(city);
   } else {
@@ -270,6 +300,7 @@ declare global {
       startNew: (name?: string) => void;
       place: (id: string, x: number, y: number) => boolean;
       demolish: (x: number, y: number) => boolean;
+      upgrade: (x: number, y: number) => boolean;
       tick: (n?: number) => void;
     };
   }
@@ -289,6 +320,11 @@ window.__AETHERIS__ = {
   },
   demolish: (x, y) => {
     const res = city.demolish(x, y);
+    if (res.ok) world.syncTile(city, x, y);
+    return res.ok;
+  },
+  upgrade: (x, y) => {
+    const res = city.upgrade(x, y);
     if (res.ok) world.syncTile(city, x, y);
     return res.ok;
   },
