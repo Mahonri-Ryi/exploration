@@ -214,6 +214,23 @@ export class City {
     }
     this.flood("powered", (d) => (d.powerGen ?? 0) > 0);
     this.flood("watered", (d) => (d.waterGen ?? 0) > 0);
+    this.radiusUtilities();
+  }
+
+  private radiusUtilities(): void {
+    for (const src of this.tiles) {
+      if (!src.buildingId) continue;
+      const def = this.def(src.buildingId);
+      if (!def) continue;
+      if (def.powerGen <= 0 && def.waterGen <= 0) continue;
+      for (const t of this.tiles) {
+        const dist = Math.abs(t.x - src.x) + Math.abs(t.y - src.y);
+        if (dist > 4) continue;
+        if (!t.road && !t.buildingId) continue;
+        if (def.powerGen > 0) t.powered = true;
+        if (def.waterGen > 0) t.watered = true;
+      }
+    }
   }
 
   private flood(flag: "powered" | "watered", isSource: (d: BuildingDef) => boolean): void {

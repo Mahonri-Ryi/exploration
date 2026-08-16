@@ -122,6 +122,26 @@ describe("utilities and economy", () => {
     expect(city.get(x + 2, y)!.powered).toBe(true);
   });
 
+  it("powers nearby buildings even without a perfect street chain", () => {
+    const city = new City(20, "Test");
+    city.money = 200000;
+    let x = 5;
+    let y = 5;
+    for (let yy = 3; yy < 14; yy++) {
+      for (let xx = 3; xx < 14; xx++) {
+        if (!city.get(xx, yy)?.water && !city.get(xx + 2, yy)?.water) {
+          x = xx;
+          y = yy;
+          break;
+        }
+      }
+    }
+    city.place("power", x, y);
+    city.place("cottage", x + 2, y);
+    city.floodUtilities();
+    expect(city.get(x + 2, y)!.powered).toBe(true);
+  });
+
   it("treats diagonal tiles as road-adjacent", () => {
     const city = new City(16, "Test");
     city.money = 50000;
