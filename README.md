@@ -60,6 +60,7 @@ Then open **http://localhost:4173**.
 ### Play on GitHub Pages (optional)
 
 The `Deploy Aetheris` workflow publishes the `dist` folder on every push to `main` once GitHub Pages is enabled for this repository (Settings → Pages → GitHub Actions). After that, the live URL is the Pages URL GitHub shows for the repo.
+
 ## How to play
 
 - **Found City** starts a new map with a $75,000 treasury and a short **primer** that teaches roads, power, water, homes, jobs, parks, upgrades, the river, fires, and laurels. Skip it anytime.
