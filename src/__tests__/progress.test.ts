@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ACHIEVEMENTS } from "../game/achievements";
+import { TOOL_CATEGORIES, TOOL_ORDER } from "../game/catalog";
 import { City } from "../game/city";
 import { TUTORIAL, tutorialStep } from "../game/tutorial";
 
@@ -92,6 +93,16 @@ describe("laurels", () => {
     expect(city.completedAchievements.has("first_home")).toBe(true);
     expect(city.upgrade(x + 2, y).ok).toBe(true);
     expect(city.completedAchievements.has("mason")).toBe(true);
+  });
+});
+
+describe("construction categories", () => {
+  it("groups every toolbar tool the way Skylines-style docks do", () => {
+    const listed = new Set(TOOL_CATEGORIES.flatMap((c) => c.tools));
+    expect(TOOL_CATEGORIES.map((c) => c.id)).toEqual(
+      expect.arrayContaining(["roads", "homes", "shops", "works", "grid", "civic", "wonders"]),
+    );
+    for (const id of TOOL_ORDER) expect(listed.has(id)).toBe(true);
   });
 });
 

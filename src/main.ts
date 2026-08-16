@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { AudioEngine } from "./audio/engine";
-import { CATALOG_BY_ID, type ToolId } from "./game/catalog";
+import { CATALOG_BY_ID, type InfoLayer, type ToolId } from "./game/catalog";
 import { City } from "./game/city";
 import { tutorialStep } from "./game/tutorial";
 import { hasSave, loadCity, saveCity } from "./game/save";
@@ -28,6 +28,7 @@ let painting = false;
 let lastPaint = "";
 let running = false;
 let inspectAt: { x: number; y: number } | null = null;
+let infoLayer: InfoLayer = "none";
 let touchPlace: { id: number; sx: number; sy: number; moved: boolean; x: number; y: number } | null = null;
 
 const TAP_PX = 14;
@@ -92,6 +93,13 @@ const hud = new Hud(hudRoot, {
     cam.setLookMode(on);
     audio.play("ui_click");
     if (on) toast("Look mode: drag to orbit, pinch to zoom.");
+  },
+  onLayer: (id) => {
+    infoLayer = id;
+    world.setLayer(id);
+    audio.play("ui_click");
+    if (id === "none") toast("City view.");
+    else toast(`${id[0]!.toUpperCase()}${id.slice(1)} layer.`);
   },
   onToggleHelp: () => {
     const open = hud.toggleHelp();
@@ -417,6 +425,7 @@ function frame(now: number): void {
       }
     }
     world.update(dt, city);
+    world.updateLayer(city, infoLayer);
     hud.update(city, city.stats());
     world.drawMinimap(hud.minimap, city);
     audio.setDayNight(world.nightAmount(city));
@@ -477,6 +486,8 @@ declare global {
         lockedTools: string[];
         missions: string[];
         laurelsEarned: string;
+        category: string;
+        layer: string;
       };
     };
   }
@@ -516,6 +527,8 @@ function readHud() {
     lockedTools: [...hudRoot.querySelectorAll(".tool.locked")].map((el) => (el as HTMLElement).dataset.tool ?? ""),
     missions: [...hudRoot.querySelectorAll("#charter-list li strong")].map((el) => el.textContent ?? ""),
     laurelsEarned: laurels?.querySelector("header span")?.textContent ?? "",
+    category: hud.category,
+    layer: hud.layer,
   };
 }
 

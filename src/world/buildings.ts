@@ -103,6 +103,9 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
       r.castShadow = true;
       g.add(r);
       g.add(place(box(0.18, 0.32, 0.18, dark, 0.95), 0.35, 0.15));
+      g.add(place(box(0.22, 0.38, 0.06, dark, 0), 0, 0.58));
+      g.add(place(box(0.28, 0.22, 0.04, glass, 0.32), -0.38, 0.58));
+      g.add(place(box(0.28, 0.22, 0.04, glass, 0.32), 0.38, 0.58));
       addTree(g, foliage, dark, -0.7, 0.45, rng);
       break;
     }
@@ -114,6 +117,8 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
       r.position.set(-0.1, 1.05, 0);
       r.castShadow = true;
       g.add(r);
+      g.add(place(box(0.24, 0.42, 0.06, dark, 0), -0.2, 0.58));
+      g.add(place(box(0.7, 0.08, 0.35, stone, 0), -0.2, 0.72));
       addTree(g, foliage, dark, -0.75, -0.5, rng);
       addTree(g, foliage, dark, 0.7, 0.55, rng);
       break;
@@ -384,13 +389,17 @@ function addTree(
   z: number,
   rng: () => number,
 ): void {
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.28, 6), dark);
-  trunk.position.set(x, 0.2, z);
+  const h = 0.32 + rng() * 0.12;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, h, 6), dark);
+  trunk.position.set(x, h / 2, z);
   trunk.castShadow = true;
-  const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.22 + rng() * 0.08, 8, 6), foliage);
-  leaf.position.set(x, 0.48 + rng() * 0.08, z);
-  leaf.castShadow = true;
-  g.add(trunk, leaf);
+  const low = new THREE.Mesh(new THREE.ConeGeometry(0.26 + rng() * 0.06, 0.42, 7), foliage);
+  low.position.set(x, h + 0.12, z);
+  low.castShadow = true;
+  const high = new THREE.Mesh(new THREE.ConeGeometry(0.16 + rng() * 0.05, 0.32, 7), foliage);
+  high.position.set(x, h + 0.36, z);
+  high.castShadow = true;
+  g.add(trunk, low, high);
 }
 
 function addFireFx(g: THREE.Group): void {

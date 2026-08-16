@@ -5,9 +5,9 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { CATALOG_BY_ID, isWaterTile, type BuildingDef } from "../game/catalog";
+import { CATALOG_BY_ID, isWaterTile, type BuildingDef, type InfoLayer } from "../game/catalog";
 import type { City } from "../game/city";
-import { mulberry } from "./textures";
+import { makeTerrainTexture, mulberry } from "./textures";
 import { createBuilding, setBuildingNight } from "./buildings";
 
 export const TILE = 2;
@@ -60,6 +60,12 @@ export class World {
   private size = 40;
   private sky: THREE.Mesh;
   private bloom: UnrealBloomPass;
+  private overlay: THREE.Mesh;
+  private overlayTex: THREE.CanvasTexture | null = null;
+  private ghostRing: THREE.Mesh;
+  private lampCount = 0;
+  private overlayTick = 0;
+  private lastLayer: InfoLayer = "none";
 
   constructor(canvas: HTMLCanvasElement) {
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
@@ -156,38 +162,46 @@ export class World {
     this.scene.add(board);
 
     const grid = new THREE.GridHelper(80, 40, 0xc9a227, 0x6a7a58);
-    grid.position.y = 0.05;
+    grid.position.y = 0.02;
     const gridMat = grid.material as THREE.LineBasicMaterial;
     gridMat.transparent = true;
-    gridMat.opacity = 0.22;
+    gridMat.opacity = 0.1;
     this.scene.add(grid);
 
     const waterMat = new THREE.ShaderMaterial({
-      transparent: false,
+      transparent: true,
       uniforms: {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x0a6f8c) },
-        shallow: { value: new THREE.Color(0x5ee0ea) },
+        deep: { value: new THREE.Color(0x064a68) },
+        shallow: { value: new THREE.Color(0x4ec8d4) },
+        foam: { value: new THREE.Color(0xd8f4f8) },
       },
       vertexShader: `
         uniform float time;
         varying vec2 vUv;
+        varying float vWave;
         void main() {
           vUv = uv;
           vec3 p = position;
-          p.z += sin(p.x * 1.8 + time * 1.4) * 0.04 + cos(p.y * 1.6 + time) * 0.03;
+          float w = sin(p.x * 1.6 + time * 1.3) * 0.05 + cos(p.z * 1.4 + time * 0.9) * 0.04;
+          p.y += w;
+          vWave = w;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
       fragmentShader: `
         uniform vec3 deep;
         uniform vec3 shallow;
+        uniform vec3 foam;
         uniform float time;
         varying vec2 vUv;
+        varying float vWave;
         void main() {
-          float n = sin(vUv.x * 40.0 + time) * 0.5 + cos(vUv.y * 36.0 - time * 0.8) * 0.5;
-          vec3 col = mix(deep, shallow, 0.55 + n * 0.2);
-          gl_FragColor = vec4(col, 1.0);
+          float n = sin(vUv.x * 28.0 + time) * 0.5 + cos(vUv.y * 22.0 - time * 0.8) * 0.5;
+          float edge = smoothstep(0.08, 0.0, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
+          vec3 col = mix(deep, shallow, 0.45 + n * 0.22 + vWave * 2.0);
+          col = mix(col, foam, edge * 0.65);
+          gl_FragColor = vec4(col, 0.92);
         }
       `,
     });
@@ -224,6 +238,27 @@ export class World {
     this.hover.position.y = 0.07;
     this.scene.add(this.hover);
 
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1.05, 48),
+      new THREE.MeshBasicMaterial({ color: 0x3ad4c8, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.08;
+    ring.visible = false;
+    this.ghost.add(ring);
+    this.ghostRing = ring;
+
+    const overlayMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    this.overlay = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), overlayMat);
+    this.overlay.rotation.x = -Math.PI / 2;
+    this.overlay.position.y = 0.09;
+    this.overlay.visible = false;
+    this.scene.add(this.overlay);
+
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), lite ? 0.14 : 0.28, 0.35, 0.82);
@@ -256,10 +291,14 @@ export class World {
     grass.anisotropy = aniso;
     asphalt.anisotropy = aniso;
     this.asphaltTex = asphalt;
+    const generated = makeTerrainTexture();
+    generated.anisotropy = aniso;
     const gmat = this.ground.material as THREE.MeshStandardMaterial;
-    gmat.map = grass;
-    gmat.color.set(0xffffff);
+    gmat.map = generated;
+    gmat.color.set(0xc8d4b0);
+    gmat.roughness = 0.95;
     gmat.needsUpdate = true;
+    void grass;
   }
 
   resize(): void {
@@ -280,7 +319,57 @@ export class World {
     this.rebuildAll(city);
   }
 
+  private heightAt(x: number, y: number, size: number): number {
+    if (isWaterTile(x, y, size)) return -0.06;
+    const nx = x / Math.max(1, size - 1);
+    const ny = y / Math.max(1, size - 1);
+    let h = 0.02 + Math.sin(nx * 5.2 + 0.3) * Math.cos(ny * 4.1) * 0.38 + Math.sin(nx * 12.4) * 0.07;
+    const riverY = 0.44 + 0.11 * Math.sin(nx * Math.PI * 2.15);
+    const dist = Math.abs(ny - riverY);
+    if (dist < 0.14) h *= dist / 0.14;
+    return Math.max(0, h);
+  }
+
   private rebuildTerrain(city: City): void {
+    const segs = city.size;
+    const geom = new THREE.PlaneGeometry(segs * TILE, segs * TILE, segs, segs);
+    geom.rotateX(-Math.PI / 2);
+    const pos = geom.attributes.position;
+    const color = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const wx = pos.getX(i);
+      const wz = pos.getZ(i);
+      const tx = Math.round(wx / TILE + city.size / 2);
+      const ty = Math.round(wz / TILE + city.size / 2);
+      const h = this.heightAt(tx, ty, city.size);
+      pos.setY(i, h);
+      const here = city.get(tx, ty);
+      const wet =
+        isWaterTile(tx, ty, city.size) ||
+        Boolean(here && city.neighbors4(tx, ty).some((n) => n.water));
+      if (wet) {
+        color[i * 3] = 0.72;
+        color[i * 3 + 1] = 0.68;
+        color[i * 3 + 2] = 0.48;
+      } else if (h > 0.28) {
+        color[i * 3] = 0.55;
+        color[i * 3 + 1] = 0.58;
+        color[i * 3 + 2] = 0.5;
+      } else {
+        color[i * 3] = 0.45;
+        color[i * 3 + 1] = 0.58;
+        color[i * 3 + 2] = 0.32;
+      }
+    }
+    geom.setAttribute("color", new THREE.BufferAttribute(color, 3));
+    geom.computeVertexNormals();
+    this.ground.geometry.dispose();
+    this.ground.geometry = geom;
+    this.ground.rotation.set(0, 0, 0);
+    this.ground.position.set(0, 0, 0);
+    const gmat = this.ground.material as THREE.MeshStandardMaterial;
+    gmat.vertexColors = true;
+
     const waterGeom = new THREE.BufferGeometry();
     const positions: number[] = [];
     const uvs: number[] = [];
@@ -289,7 +378,7 @@ export class World {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
         const s = TILE * 0.52;
-        const y0 = 0.12;
+        const y0 = 0.1;
         const quad = [
           [p.x - s, y0, p.z - s],
           [p.x + s, y0, p.z - s],
@@ -329,17 +418,18 @@ export class World {
       const p = tileToWorld(x, y, city.size);
       p.x += (rng() - 0.5) * 1.2;
       p.z += (rng() - 0.5) * 1.2;
+      p.y = this.heightAt(x, y, city.size);
       spots.push(p);
     }
     const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 0.45, 5), bark, spots.length);
     const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(0.38, 0.85, 7), foliage, spots.length);
     trunk.castShadow = leaves.castShadow = true;
     spots.forEach((p, i) => {
-      dummy.position.set(p.x, 0.2, p.z);
-      dummy.scale.setScalar(0.8 + rng() * 0.6);
+      dummy.position.set(p.x, p.y + 0.22, p.z);
+      dummy.scale.setScalar(0.9 + rng() * 0.7);
       dummy.updateMatrix();
       trunk.setMatrixAt(i, dummy.matrix);
-      dummy.position.y = 0.72;
+      dummy.position.y = p.y + 0.78;
       dummy.updateMatrix();
       leaves.setMatrixAt(i, dummy.matrix);
     });
@@ -351,6 +441,7 @@ export class World {
     for (const [, m] of this.roads) this.roadGroup.remove(m);
     this.buildings.clear();
     this.roads.clear();
+    this.lampCount = 0;
     for (const tile of city.tiles) {
       if (tile.road) this.ensureRoad(city, tile.x, tile.y);
       else if (tile.buildingId && tile.buildingId !== "road") this.ensureBuilding(city, tile.x, tile.y);
@@ -400,6 +491,7 @@ export class World {
     const mesh = createBuilding(def, x * 131 + y * 17);
     mesh.scale.setScalar(1.28);
     const p = tileToWorld(x, y, city.size);
+    p.y = this.heightAt(x, y, city.size);
     mesh.position.copy(p);
     mesh.userData.tile = { x, y };
     this.buildGroup.add(mesh);
@@ -416,7 +508,8 @@ export class World {
       metalness: 0.08,
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.98, tile?.water ? 0.16 : 0.1, TILE * 0.98), mat);
-    mesh.position.set(p.x, tile?.water ? 0.22 : 0.06, p.z);
+    const groundY = tile?.water ? 0.22 : this.heightAt(x, y, city.size) + 0.05;
+    mesh.position.set(p.x, groundY, p.z);
     mesh.receiveShadow = true;
     mesh.castShadow = Boolean(tile?.water);
     if (tile?.water) {
@@ -451,6 +544,33 @@ export class World {
       const line = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, TILE * 0.7), mark);
       line.position.y = 0.05;
       mesh.add(line);
+    }
+    const walk = new THREE.Mesh(
+      new THREE.BoxGeometry(TILE * 0.98, 0.03, TILE * 0.16),
+      new THREE.MeshStandardMaterial({ color: 0xb7b0a0, roughness: 0.85 }),
+    );
+    walk.position.set(0, 0.04, TILE * 0.42);
+    const walk2 = walk.clone();
+    walk2.position.z = -TILE * 0.42;
+    if (!tile?.water) mesh.add(walk, walk2);
+    const links = [n, s, e, w].filter(Boolean).length;
+    if (!tile?.water && (links >= 3 || (x + y) % 3 === 0) && this.lampCount < 48) {
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.04, 0.85, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2a2d33, metalness: 0.4, roughness: 0.4 }),
+      );
+      pole.position.set(0.7, 0.48, 0.7);
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 8, 6),
+        new THREE.MeshStandardMaterial({
+          color: 0xf3d48a,
+          emissive: 0xf0b36a,
+          emissiveIntensity: 0.9,
+        }),
+      );
+      bulb.position.set(0.7, 0.92, 0.7);
+      mesh.add(pole, bulb);
+      this.lampCount += 1;
     }
     mesh.userData.tile = { x, y };
     this.roadGroup.add(mesh);
@@ -624,6 +744,7 @@ export class World {
     }
     this.ghost.visible = true;
     const p = tileToWorld(x, y, this.size);
+    p.y = this.heightAt(x, y, this.size);
     this.ghost.position.copy(p);
     const mesh = this.ghost.children[0] as THREE.Mesh;
     const h = Math.max(0.2, def.height * 0.45);
@@ -632,13 +753,68 @@ export class World {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.set(valid ? 0x3ad4c8 : 0xd4544a);
     mat.emissive.set(valid ? 0x1aa89c : 0x801818);
+    const radius = Math.max(1, def.serviceRadius || 0);
+    this.ghostRing.visible = radius > 1;
+    this.ghostRing.scale.setScalar(radius * TILE * 0.55);
+    const ringMat = this.ghostRing.material as THREE.MeshBasicMaterial;
+    ringMat.color.set(valid ? 0x3ad4c8 : 0xd4544a);
+  }
+
+  setLayer(id: InfoLayer): void {
+    this.overlay.visible = id !== "none";
+  }
+
+  updateLayer(city: City, layer: InfoLayer): void {
+    if (layer === "none") {
+      this.overlay.visible = false;
+      return;
+    }
+    this.overlayTick += 1;
+    if (this.overlayTex && this.lastLayer === layer && this.overlayTick % 10 !== 1) {
+      this.overlay.visible = true;
+      return;
+    }
+    this.lastLayer = layer;
+    this.overlay.visible = true;
+    const s = city.size;
+    const canvas = document.createElement("canvas");
+    canvas.width = s;
+    canvas.height = s;
+    const ctx = canvas.getContext("2d")!;
+    for (const t of city.tiles) {
+      let fill = "rgba(0,0,0,0.15)";
+      if (layer === "power") {
+        if (t.buildingId && !t.road) fill = t.powered ? "rgba(58,212,200,0.55)" : "rgba(208,80,70,0.5)";
+        else if (t.road) fill = t.powered ? "rgba(58,212,200,0.28)" : "rgba(20,20,24,0.35)";
+      } else if (layer === "water") {
+        if (t.water) fill = "rgba(42,160,184,0.45)";
+        else if (t.buildingId && !t.road) fill = t.watered ? "rgba(90,168,212,0.55)" : "rgba(208,80,70,0.5)";
+        else if (t.road) fill = t.watered ? "rgba(90,168,212,0.28)" : "rgba(20,20,24,0.35)";
+      } else {
+        const cov = city.coverageAt(t.x, t.y);
+        const v = Math.max(0, Math.min(1, cov.park / 10 + cov.service / 4 - cov.pollution / 8));
+        fill = `rgba(${Math.round(220 - v * 140)},${Math.round(80 + v * 140)},${Math.round(70 + v * 40)},0.45)`;
+      }
+      ctx.fillStyle = fill;
+      ctx.fillRect(t.x, s - 1 - t.y, 1, 1);
+    }
+    if (this.overlayTex) this.overlayTex.dispose();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.overlayTex = tex;
+    const mat = this.overlay.material as THREE.MeshBasicMaterial;
+    mat.map = tex;
+    mat.opacity = 0.85;
+    mat.needsUpdate = true;
   }
 
   setHover(x: number, y: number, show: boolean): void {
     this.hover.visible = show;
     if (!show) return;
     const p = tileToWorld(x, y, this.size);
-    this.hover.position.set(p.x, 0.07, p.z);
+    this.hover.position.set(p.x, this.heightAt(x, y, this.size) + 0.08, p.z);
   }
 
   pickGround(ndc: THREE.Vector2): THREE.Vector3 | null {
@@ -654,7 +830,7 @@ export class World {
   pickTile(ndc: THREE.Vector2, size: number): { x: number; y: number } | null {
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
-    const hits = ray.intersectObjects([this.buildGroup, this.roadGroup], true);
+    const hits = ray.intersectObjects([this.buildGroup, this.roadGroup, this.ground], true);
     for (const hit of hits) {
       let obj: THREE.Object3D | null = hit.object;
       while (obj) {
@@ -680,9 +856,9 @@ export class World {
     skyMat.uniforms.night.value = night;
     this.sun.position.set(Math.cos(sunAngle) * 60, Math.max(4, elev * 50 + 8), Math.sin(sunAngle) * 40);
     this.sun.target.position.set(0, 0, 0);
-    this.sun.intensity = 0.25 + (1 - night) * 2.0;
-    this.sun.color.set(night > 0.6 ? 0xffb070 : 0xffe6c2);
-    this.hemi.intensity = 0.22 + (1 - night) * 0.55;
+    this.sun.intensity = 0.35 + (1 - night) * 2.35;
+    this.sun.color.set(night > 0.55 ? 0xff9a62 : elev > 0.15 ? 0xffe4b8 : 0xffc08a);
+    this.hemi.intensity = 0.28 + (1 - night) * 0.62;
     this.moon.intensity = 0.08 + night * 0.35;
     this.moon.position.set(-40, 30, -20);
     const fog = this.scene.fog as THREE.Fog;

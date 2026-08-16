@@ -603,6 +603,32 @@ export const TOOL_ORDER = [
 
 export type ToolId = (typeof TOOL_ORDER)[number];
 
+export interface ToolCategory {
+  id: string;
+  label: string;
+  tools: ToolId[];
+}
+
+/** Cities: Skylines / Anno style construction groups. */
+export const TOOL_CATEGORIES: ToolCategory[] = [
+  { id: "survey", label: "Survey", tools: ["inspect"] },
+  { id: "roads", label: "Roads", tools: ["road"] },
+  { id: "homes", label: "Homes", tools: ["cottage", "villa", "apartments", "tower"] },
+  { id: "shops", label: "Shops", tools: ["shop", "inn", "market", "offices", "dock"] },
+  { id: "works", label: "Works", tools: ["workshop", "factory", "plant"] },
+  { id: "parks", label: "Parks", tools: ["park", "plaza"] },
+  { id: "grid", label: "Grid", tools: ["mill", "power", "water"] },
+  { id: "civic", label: "Civic", tools: ["school", "police", "fire", "hospital"] },
+  { id: "wonders", label: "Wonders", tools: ["cityhall", "beacon", "observatory"] },
+  { id: "raze", label: "Raze", tools: ["bulldoze"] },
+];
+
+export function categoryForTool(id: ToolId): ToolCategory {
+  return TOOL_CATEGORIES.find((c) => c.tools.includes(id)) ?? TOOL_CATEGORIES[0]!;
+}
+
+export type InfoLayer = "none" | "power" | "water" | "spirit";
+
 export function isWaterTile(x: number, y: number, size: number): boolean {
   const nx = x / Math.max(1, size - 1);
   const ny = y / Math.max(1, size - 1);
