@@ -203,9 +203,10 @@ input { -webkit-user-select: text; user-select: text; }
 .chip.blaze { border-color: var(--bad); color: var(--bad); }
 .stat.fire-stat b { color: var(--bad); }
 .help {
-  position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: calc(var(--chrome-h, 200px) + 16px); transform: translateX(-50%);
   width: min(520px, 86vw); padding: 16px 18px;
   background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(12px);
+  z-index: 9;
 }
 .help h3 { margin: 0 0 8px; font-family: var(--display); letter-spacing: 0.1em; font-size: 15px; }
 .help ul { margin: 0; padding-left: 18px; }
