@@ -89,6 +89,8 @@ button, input { font-family: inherit; }
 .tool small { color: var(--gold); font-size: 10px; }
 .tool.on { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
 .tool.locked { opacity: 0.35; }
+.tool.danger { margin-top: 10px; border-color: rgba(224, 122, 106, 0.45); }
+.tool.danger.on { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
 
 .inspect {
   position: absolute; right: 16px; top: 86px; width: 280px;

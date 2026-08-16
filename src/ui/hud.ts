@@ -76,7 +76,7 @@ export class Hud {
       const name = def ? def.name : id === "inspect" ? "Survey" : "Raze";
       const cost = def ? `$${def.cost.toLocaleString()}` : "";
       const btn = document.createElement("button");
-      btn.className = "tool";
+      btn.className = id === "bulldoze" ? "tool danger" : "tool";
       btn.dataset.tool = id;
       btn.title = def ? `${def.name} — ${def.description}` : name;
       btn.innerHTML = `

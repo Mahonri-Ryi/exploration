@@ -315,15 +315,15 @@ export class World {
       p.z += (rng() - 0.5) * 1.2;
       spots.push(p);
     }
-    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 0.4, 5), bark, spots.length);
-    const leaves = new THREE.InstancedMesh(new THREE.SphereGeometry(0.32, 7, 5), foliage, spots.length);
+    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 0.45, 5), bark, spots.length);
+    const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(0.38, 0.85, 7), foliage, spots.length);
     trunk.castShadow = leaves.castShadow = true;
     spots.forEach((p, i) => {
       dummy.position.set(p.x, 0.2, p.z);
       dummy.scale.setScalar(0.8 + rng() * 0.6);
       dummy.updateMatrix();
       trunk.setMatrixAt(i, dummy.matrix);
-      dummy.position.y = 0.52;
+      dummy.position.y = 0.72;
       dummy.updateMatrix();
       leaves.setMatrixAt(i, dummy.matrix);
     });
