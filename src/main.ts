@@ -189,12 +189,18 @@ continueBtn.addEventListener("click", () => {
 
 title.addEventListener("pointerdown", () => {
   void audio.unlock();
-}, { once: true });
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void audio.unlock();
+});
 
 const pointer = new THREE.Vector2();
-function ndc(e: PointerEvent): THREE.Vector2 {
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+function ndc(e: { clientX: number; clientY: number }): THREE.Vector2 {
+  const r = canvas.getBoundingClientRect();
+  const w = Math.max(1, r.width);
+  const h = Math.max(1, r.height);
+  pointer.x = ((e.clientX - r.left) / w) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / h) * 2 + 1;
   return pointer;
 }
 
@@ -255,7 +261,7 @@ function applyTool(x: number, y: number): void {
 }
 
 function cameraStealsTool(): boolean {
-  return cam.lookMode || cam.pointerCount() >= 2;
+  return cam.isBusy();
 }
 
 canvas.addEventListener("pointermove", (e) => {
@@ -312,9 +318,10 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 canvas.addEventListener("pointerdown", (e) => {
+  void audio.unlock();
   if (!running || e.altKey || e.shiftKey) return;
   if (e.button !== 0 && e.pointerType !== "touch") return;
-  if (cam.lookMode || cam.pointerCount() >= 2) {
+  if (cam.lookMode || cam.isBusy()) {
     touchPlace = null;
     painting = false;
     return;
@@ -337,11 +344,15 @@ window.addEventListener("pointerup", (e) => {
   if (touchPlace && e.pointerId === touchPlace.id) {
     const pending = touchPlace;
     touchPlace = null;
-    if (!cam.lookMode && !pending.moved) {
+    if (!cam.isBusy() && !pending.moved) {
       const t = hoverTile(e);
       if (t) applyTool(t.x, t.y);
     }
   }
+  painting = false;
+});
+window.addEventListener("pointercancel", () => {
+  touchPlace = null;
   painting = false;
 });
 

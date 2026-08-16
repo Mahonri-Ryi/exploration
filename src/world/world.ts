@@ -65,13 +65,15 @@ export class World {
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
     this.camera.position.set(28, 22, 28);
 
+    const lite = preferLiteGpu();
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: !lite,
       alpha: false,
-      powerPreference: "high-performance",
+      stencil: false,
+      powerPreference: lite ? "default" : "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preferLiteGpu() ? 1.25 : 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, lite ? 1.25 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -88,7 +90,7 @@ export class World {
 
     this.sun = new THREE.DirectionalLight(0xffe6c2, 2.6);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(preferLiteGpu() ? 1024 : 2048, preferLiteGpu() ? 1024 : 2048);
+    this.sun.shadow.mapSize.set(lite ? 1024 : 2048, lite ? 1024 : 2048);
     this.sun.shadow.camera.near = 1;
     this.sun.shadow.camera.far = 160;
     this.sun.shadow.camera.left = -55;
@@ -222,7 +224,6 @@ export class World {
     this.hover.position.y = 0.07;
     this.scene.add(this.hover);
 
-    const lite = preferLiteGpu();
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), lite ? 0.14 : 0.28, 0.35, 0.82);
@@ -233,6 +234,10 @@ export class World {
     this.spawnBirds();
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    window.visualViewport?.addEventListener("resize", () => this.resize());
+    window.visualViewport?.addEventListener("scroll", () => this.resize());
+    canvas.addEventListener("webglcontextlost", (e) => e.preventDefault());
+    canvas.addEventListener("webglcontextrestored", () => this.resize());
   }
 
   async loadTextures(): Promise<void> {
@@ -247,8 +252,9 @@ export class World {
     asphalt.wrapS = asphalt.wrapT = THREE.RepeatWrapping;
     grass.repeat.set(10, 10);
     asphalt.repeat.set(1, 1);
-    grass.anisotropy = 8;
-    asphalt.anisotropy = 8;
+    const aniso = preferLiteGpu() ? 1 : 8;
+    grass.anisotropy = aniso;
+    asphalt.anisotropy = aniso;
     this.asphaltTex = asphalt;
     const gmat = this.ground.material as THREE.MeshStandardMaterial;
     gmat.map = grass;
@@ -257,12 +263,13 @@ export class World {
   }
 
   resize(): void {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const canvas = this.renderer.domElement;
+    const w = Math.max(1, canvas.clientWidth || window.innerWidth);
+    const h = Math.max(1, canvas.clientHeight || window.innerHeight);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preferLiteGpu() ? 1.25 : 2));
-    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preferLiteGpu() ? 1.25 : 2));
+    this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.setSize(w, h);
   }
