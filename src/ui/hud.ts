@@ -15,6 +15,8 @@ export interface HudHandlers {
   onTutorialContinue: () => void;
   onToggleLaurels: () => void;
   onReplayTutorial: () => void;
+  onLook: (on: boolean) => void;
+  onToggleHelp: () => void;
 }
 
 const ICONS: Record<string, string> = {
@@ -27,6 +29,8 @@ export class Hud {
   private handlers: HudHandlers;
   tool: ToolId = "inspect";
   laurelsOpen = false;
+  lookMode = false;
+  charterOpen = false;
   private coachId = "";
 
   constructor(root: HTMLElement, handlers: HudHandlers) {
@@ -65,29 +69,37 @@ export class Hud {
           <button id="btn-menu">Menu</button>
         </div>
       </header>
-      <aside class="toolbar" id="toolbar"></aside>
       <section class="inspect" id="inspect-panel" hidden></section>
       <section class="charter" id="charter">
         <h3>Charter</h3>
         <ol id="charter-list"></ol>
         <canvas id="minimap" width="40" height="40" aria-label="Minimap"></canvas>
       </section>
+      <div class="play-chrome">
       <footer class="bottom">
+        <div class="mobile-dock">
+          <button type="button" id="btn-look" title="Drag to orbit">Look</button>
+          <button type="button" id="btn-charter" title="Charter and minimap">Charter</button>
+          <button type="button" id="btn-notes" title="Field notes">Notes</button>
+        </div>
         <div class="demand">
           <label>R <i id="bar-r"></i></label>
           <label>C <i id="bar-c"></i></label>
           <label>I <i id="bar-i"></i></label>
         </div>
-        <div class="hint" id="hint">Select a tool. Right-drag to orbit. Scroll to zoom. WASD to pan.</div>
+        <div class="hint" id="hint">Tap to build · two fingers orbit · Look to drag the view</div>
         <label class="tax">Levy
           <input id="tax" type="range" min="4" max="16" value="9" />
           <b id="tax-val">9%</b>
         </label>
       </footer>
+      <aside class="toolbar" id="toolbar"></aside>
+      </div>
       <aside class="help" id="help-sheet" hidden>
         <h3>Field notes</h3>
         <ul>
-          <li><kbd>1</kbd>–<kbd>8</kbd> tools · <kbd>I</kbd> survey · <kbd>X</kbd> raze · <kbd>U</kbd> upgrade</li>
+          <li>Phone: tap to build, drag Avenue to paint, two fingers to orbit and pinch to zoom. Look lets one finger orbit.</li>
+          <li><kbd>1</kbd>–<kbd>8</kbd> tools · <kbd>I</kbd> survey · <kbd>X</kbd> raze · <kbd>U</kbd> upgrade · <kbd>L</kbd> look</li>
           <li><kbd>H</kbd> this sheet · <kbd>Space</kbd> pause · <kbd>R</kbd> reset camera</li>
           <li>Right-drag orbits. WASD pans. Scroll zooms. Paint avenues across water for bridges.</li>
           <li>Windmills make clean power. Docks need shore. The Beacon doubles trader dues.</li>
@@ -128,6 +140,9 @@ export class Hud {
     this.root.querySelector("#btn-laurels")!.addEventListener("click", () => this.handlers.onToggleLaurels());
     this.root.querySelector("#btn-save")!.addEventListener("click", () => this.handlers.onSave());
     this.root.querySelector("#btn-menu")!.addEventListener("click", () => this.handlers.onMenu());
+    this.root.querySelector("#btn-look")!.addEventListener("click", () => this.toggleLook());
+    this.root.querySelector("#btn-charter")!.addEventListener("click", () => this.toggleCharter());
+    this.root.querySelector("#btn-notes")!.addEventListener("click", () => this.handlers.onToggleHelp());
     this.root.querySelector("#btn-replay-primer")!.addEventListener("click", () => this.handlers.onReplayTutorial());
     const tax = this.root.querySelector("#tax") as HTMLInputElement;
     tax.addEventListener("input", () => {
@@ -135,6 +150,23 @@ export class Hud {
       (this.root.querySelector("#tax-val") as HTMLElement).textContent = `${tax.value}%`;
       this.handlers.onTax(n);
     });
+    this.bindChromeHeight();
+  }
+
+  private bindChromeHeight(): void {
+    const chrome = this.root.querySelector(".play-chrome") as HTMLElement | null;
+    if (!chrome) return;
+    const apply = () => {
+      const box = chrome.getBoundingClientRect().height;
+      const bar = this.root.querySelector(".bottom") as HTMLElement | null;
+      const tools = this.root.querySelector(".toolbar") as HTMLElement | null;
+      const sum =
+        (bar?.getBoundingClientRect().height ?? 0) + (tools?.getBoundingClientRect().height ?? 0);
+      const h = box > 1 ? box : sum;
+      if (h > 0) this.root.style.setProperty("--chrome-h", `${Math.ceil(h)}px`);
+    };
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(apply).observe(chrome);
+    apply();
   }
 
   setTool(id: ToolId): void {
@@ -144,14 +176,47 @@ export class Hud {
     });
     const def = CATALOG_BY_ID[id];
     const hint = this.root.querySelector("#hint")!;
-    if (id === "inspect") hint.textContent = "Survey a plot. Press U to upgrade a building.";
+    if (this.lookMode) hint.textContent = "Look: drag to orbit, pinch to zoom. Tap Look again to build.";
+    else if (id === "inspect") hint.textContent = "Survey a plot. Tap Raise, or press U, to upgrade.";
     else if (id === "bulldoze") hint.textContent = "Raze a structure. The treasury recovers 40%.";
-    else if (id === "road") hint.textContent = "Avenue: paint land, or span water as a gold bridge ($90).";
+    else if (id === "road") hint.textContent = "Avenue: drag to paint, or span water as a gold bridge ($90).";
     else if (id === "mill") hint.textContent = "Windmill: cheap clean power. Needs an avenue, not a water main.";
     else if (id === "beacon") hint.textContent = "River Beacon: unique lighthouse on the shore. Doubles dock dues.";
     else if (id === "observatory") hint.textContent = "Observatory: unique wonder. Lifts spirit across the city.";
     else if (id === "inn") hint.textContent = "Hearth Inn: rooms for travelers. Nearby homes sleep easier.";
     else if (def) hint.textContent = `${def.name}: ${def.description}`;
+  }
+
+  toggleLook(): boolean {
+    this.lookMode = !this.lookMode;
+    this.root.querySelector("#btn-look")?.classList.toggle("on", this.lookMode);
+    this.handlers.onLook(this.lookMode);
+    this.setTool(this.tool);
+    return this.lookMode;
+  }
+
+  setLookMode(on: boolean): void {
+    this.lookMode = on;
+    this.root.querySelector("#btn-look")?.classList.toggle("on", on);
+    this.setTool(this.tool);
+  }
+
+  toggleCharter(): boolean {
+    this.charterOpen = !this.charterOpen;
+    this.root.querySelector("#charter")?.classList.toggle("open", this.charterOpen);
+    this.root.querySelector("#btn-charter")?.classList.toggle("on", this.charterOpen);
+    if (this.charterOpen) {
+      this.hideInspect();
+      this.setHelpOpen(false);
+    }
+    return this.charterOpen;
+  }
+
+  private setHelpOpen(open: boolean): void {
+    const sheet = this.root.querySelector("#help-sheet") as HTMLElement | null;
+    if (!sheet) return;
+    sheet.hidden = !open;
+    this.root.querySelector("#btn-notes")?.classList.toggle("on", open);
   }
 
   setSpeed(n: number): void {
@@ -233,7 +298,10 @@ export class Hud {
         : "A watercourse. Paint an avenue from shore to raise a bridge."
       : "A plot awaiting a purpose.";
     panel.innerHTML = `
-      <h3>${tile.road && tile.water ? "Bridge" : def ? def.name : tile.water ? "River" : "Open land"}</h3>
+      <header class="inspect-head">
+        <h3>${tile.road && tile.water ? "Bridge" : def ? def.name : tile.water ? "River" : "Open land"}</h3>
+        <button type="button" class="text-btn" data-close>Close</button>
+      </header>
       <p>${def ? def.description : waterText}</p>
       <ul>
         <li>Parcel ${x}, ${y}</li>
@@ -254,6 +322,7 @@ export class Hud {
     `;
     const btn = panel.querySelector(".upgrade") as HTMLButtonElement | null;
     btn?.addEventListener("click", () => this.handlers.onUpgrade(x, y));
+    panel.querySelector("[data-close]")?.addEventListener("click", () => this.hideInspect());
   }
 
   hideInspect(): void {
@@ -263,8 +332,14 @@ export class Hud {
   toggleHelp(): boolean {
     const sheet = this.root.querySelector("#help-sheet") as HTMLElement | null;
     if (!sheet) return false;
-    sheet.hidden = !sheet.hidden;
-    return !sheet.hidden;
+    const open = sheet.hidden;
+    this.setHelpOpen(open);
+    if (open && this.charterOpen) {
+      this.charterOpen = false;
+      this.root.querySelector("#charter")?.classList.remove("open");
+      this.root.querySelector("#btn-charter")?.classList.remove("on");
+    }
+    return open;
   }
 
   toggleLaurels(city: City): boolean {

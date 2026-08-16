@@ -28,6 +28,10 @@ let painting = false;
 let lastPaint = "";
 let running = false;
 let inspectAt: { x: number; y: number } | null = null;
+let touchPlace: { id: number; sx: number; sy: number; moved: boolean; x: number; y: number } | null = null;
+
+const TAP_PX = 14;
+const PAN_CANCEL_PX = 28;
 
 const hud = new Hud(hudRoot, {
   onTool: (id) => setTool(id),
@@ -83,6 +87,16 @@ const hud = new Hud(hudRoot, {
     audio.play("ui_click");
     toast("The primer begins again.");
     hud.update(city, city.stats());
+  },
+  onLook: (on) => {
+    cam.setLookMode(on);
+    audio.play("ui_click");
+    if (on) toast("Look mode: drag to orbit, pinch to zoom.");
+  },
+  onToggleHelp: () => {
+    const open = hud.toggleHelp();
+    if (open) city.note("helpOpened");
+    audio.play("ui_click");
   },
 });
 
@@ -175,12 +189,18 @@ continueBtn.addEventListener("click", () => {
 
 title.addEventListener("pointerdown", () => {
   void audio.unlock();
-}, { once: true });
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void audio.unlock();
+});
 
 const pointer = new THREE.Vector2();
-function ndc(e: PointerEvent): THREE.Vector2 {
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+function ndc(e: { clientX: number; clientY: number }): THREE.Vector2 {
+  const r = canvas.getBoundingClientRect();
+  const w = Math.max(1, r.width);
+  const h = Math.max(1, r.height);
+  pointer.x = ((e.clientX - r.left) / w) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / h) * 2 + 1;
   return pointer;
 }
 
@@ -240,8 +260,19 @@ function applyTool(x: number, y: number): void {
   }
 }
 
+function cameraStealsTool(): boolean {
+  return cam.isBusy();
+}
+
 canvas.addEventListener("pointermove", (e) => {
   if (!running) return;
+  if (cameraStealsTool()) {
+    painting = false;
+    if (cam.pointerCount() >= 2) touchPlace = null;
+    world.setHover(0, 0, false);
+    world.setGhost(null, 0, 0, false);
+    return;
+  }
   const t = hoverTile(e);
   if (!t) {
     world.setHover(0, 0, false);
@@ -256,6 +287,27 @@ canvas.addEventListener("pointermove", (e) => {
   } else {
     world.setGhost(null, 0, 0, false);
   }
+  if (touchPlace && e.pointerId === touchPlace.id) {
+    const dist = Math.hypot(e.clientX - touchPlace.sx, e.clientY - touchPlace.sy);
+    if (dist > TAP_PX) touchPlace.moved = true;
+    if ((tool === "road" || tool === "bulldoze") && dist > TAP_PX) {
+      painting = true;
+      if (!lastPaint) {
+        lastPaint = `${touchPlace.x},${touchPlace.y}`;
+        applyTool(touchPlace.x, touchPlace.y);
+      }
+      const key = `${t.x},${t.y}`;
+      if (key !== lastPaint) {
+        lastPaint = key;
+        applyTool(t.x, t.y);
+      }
+      return;
+    }
+    if (tool !== "road" && tool !== "bulldoze" && dist > PAN_CANCEL_PX) {
+      touchPlace = null;
+    }
+    return;
+  }
   if (painting && (tool === "road" || tool === "bulldoze")) {
     const key = `${t.x},${t.y}`;
     if (key !== lastPaint) {
@@ -266,7 +318,21 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (!running || e.button !== 0 || e.altKey || e.shiftKey) return;
+  void audio.unlock();
+  if (!running || e.altKey || e.shiftKey) return;
+  if (e.button !== 0 && e.pointerType !== "touch") return;
+  if (cam.lookMode || cam.isBusy()) {
+    touchPlace = null;
+    painting = false;
+    return;
+  }
+  if (e.pointerType === "touch") {
+    const start = hoverTile(e);
+    if (!start) return;
+    touchPlace = { id: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false, x: start.x, y: start.y };
+    lastPaint = "";
+    return;
+  }
   const t = hoverTile(e);
   if (!t) return;
   painting = true;
@@ -274,7 +340,19 @@ canvas.addEventListener("pointerdown", (e) => {
   applyTool(t.x, t.y);
 });
 
-window.addEventListener("pointerup", () => {
+window.addEventListener("pointerup", (e) => {
+  if (touchPlace && e.pointerId === touchPlace.id) {
+    const pending = touchPlace;
+    touchPlace = null;
+    if (!cam.isBusy() && !pending.moved) {
+      const t = hoverTile(e);
+      if (t) applyTool(t.x, t.y);
+    }
+  }
+  painting = false;
+});
+window.addEventListener("pointercancel", () => {
+  touchPlace = null;
   painting = false;
 });
 
@@ -297,6 +375,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") setTool("inspect");
   if (e.key.toLowerCase() === "u" && inspectAt) tryUpgrade(inspectAt.x, inspectAt.y);
   if (e.key.toLowerCase() === "r") cam.reset();
+  if (e.key.toLowerCase() === "l") hud.toggleLook();
   if (e.key.toLowerCase() === "h") {
     const open = hud.toggleHelp();
     if (open) city.note("helpOpened");
