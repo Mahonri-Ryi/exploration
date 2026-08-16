@@ -121,15 +121,22 @@ export class City {
   }
 
   neighbors4(x: number, y: number): Tile[] {
+    return this.neighbors(x, y, false);
+  }
+
+  neighbors8(x: number, y: number): Tile[] {
+    return this.neighbors(x, y, true);
+  }
+
+  private neighbors(x: number, y: number, diag: boolean): Tile[] {
     const out: Tile[] = [];
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const t = this.get(x + dx, y + dy);
-      if (t) out.push(t);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (!diag && dx !== 0 && dy !== 0) continue;
+        const t = this.get(x + dx, y + dy);
+        if (t) out.push(t);
+      }
     }
     return out;
   }
@@ -138,7 +145,7 @@ export class City {
     const t = this.get(x, y);
     if (!t) return false;
     if (t.road) return true;
-    return this.neighbors4(x, y).some((n) => n.road);
+    return this.neighbors8(x, y).some((n) => n.road);
   }
 
   canPlace(id: string, x: number, y: number): { ok: boolean; reason?: string } {
@@ -221,7 +228,7 @@ export class City {
     }
     while (q.length) {
       const cur = q.pop()!;
-      for (const n of this.neighbors4(cur.x, cur.y)) {
+      for (const n of this.neighbors8(cur.x, cur.y)) {
         if (n[flag]) continue;
         if (n.water) continue;
         if (!n.road && !n.buildingId) continue;

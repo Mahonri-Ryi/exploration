@@ -122,6 +122,24 @@ describe("utilities and economy", () => {
     expect(city.get(x + 2, y)!.powered).toBe(true);
   });
 
+  it("treats diagonal tiles as road-adjacent", () => {
+    const city = new City(16, "Test");
+    city.money = 50000;
+    let x = 4;
+    let y = 4;
+    for (let yy = 3; yy < 12; yy++) {
+      for (let xx = 3; xx < 12; xx++) {
+        if (!city.get(xx, yy)?.water && !city.get(xx + 1, yy + 1)?.water) {
+          x = xx;
+          y = yy;
+          break;
+        }
+      }
+    }
+    city.place("road", x, y);
+    expect(city.hasRoadAccess(x + 1, y + 1)).toBe(true);
+  });
+
   it("grows residents when a home is serviced", () => {
     const city = new City(20, "Test");
     city.money = 200000;

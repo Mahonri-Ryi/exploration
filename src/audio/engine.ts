@@ -32,12 +32,23 @@ export class AudioEngine {
   private ready = false;
   muted = false;
   masterVolume = 0.85;
+  private unlocking: Promise<void> | null = null;
 
   async unlock(): Promise<void> {
     if (this.ready) {
       await this.ctx?.resume();
       return;
     }
+    if (this.unlocking) return this.unlocking;
+    this.unlocking = this.init();
+    try {
+      await this.unlocking;
+    } finally {
+      this.unlocking = null;
+    }
+  }
+
+  private async init(): Promise<void> {
     const ctx = new AudioContext();
     this.ctx = ctx;
     this.master = ctx.createGain();

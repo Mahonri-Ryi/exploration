@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 export class OrbitCam {
   target = new THREE.Vector3(0, 0, 0);
-  spherical = new THREE.Spherical(48, 0.92, Math.PI / 4);
+  spherical = new THREE.Spherical(34, 1.02, Math.PI / 4);
   private dragging: "orbit" | "pan" | null = null;
   private last = new THREE.Vector2();
   private keys = new Set<string>();
@@ -23,8 +23,8 @@ export class OrbitCam {
         e.preventDefault();
         this.spherical.radius = THREE.MathUtils.clamp(
           this.spherical.radius + e.deltaY * 0.03,
-          12,
-          90,
+          10,
+          72,
         );
       },
       { passive: false },
@@ -79,6 +79,6 @@ export class OrbitCam {
 
   reset(): void {
     this.target.set(0, 0, 0);
-    this.spherical.set(48, 0.92, Math.PI / 4);
+    this.spherical.set(34, 1.02, Math.PI / 4);
   }
 }

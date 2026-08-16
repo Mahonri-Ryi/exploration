@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -55,8 +56,8 @@ export class World {
   private bloom: UnrealBloomPass;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
-    this.camera.position.set(38, 32, 38);
+    this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
+    this.camera.position.set(28, 22, 28);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -71,13 +72,15 @@ export class World {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.fog = new THREE.FogExp2(0x8aa4b8, 0.012);
-    this.scene.background = new THREE.Color(0x87a0b4);
+    this.scene.fog = new THREE.Fog(0xb7c9d6, 55, 160);
+    this.scene.background = new THREE.Color(0x9eb6c8);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
 
     this.hemi = new THREE.HemisphereLight(0xc8ddf0, 0x3d4a32, 0.7);
     this.scene.add(this.hemi);
 
-    this.sun = new THREE.DirectionalLight(0xffe6c2, 2.15);
+    this.sun = new THREE.DirectionalLight(0xffe6c2, 2.6);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.near = 1;
@@ -135,6 +138,21 @@ export class World {
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.receiveShadow = true;
     this.scene.add(this.ground);
+
+    const board = new THREE.Mesh(
+      new THREE.PlaneGeometry(80.4, 80.4),
+      new THREE.MeshStandardMaterial({ color: 0x2a241c, roughness: 0.9 }),
+    );
+    board.rotation.x = -Math.PI / 2;
+    board.position.y = -0.04;
+    this.scene.add(board);
+
+    const grid = new THREE.GridHelper(80, 40, 0xc9a227, 0x6a7a58);
+    grid.position.y = 0.05;
+    const gridMat = grid.material as THREE.LineBasicMaterial;
+    gridMat.transparent = true;
+    gridMat.opacity = 0.22;
+    this.scene.add(grid);
 
     const waterMat = new THREE.ShaderMaterial({
       transparent: true,
@@ -219,7 +237,7 @@ export class World {
     asphalt.colorSpace = THREE.SRGBColorSpace;
     grass.wrapS = grass.wrapT = THREE.RepeatWrapping;
     asphalt.wrapS = asphalt.wrapT = THREE.RepeatWrapping;
-    grass.repeat.set(18, 18);
+    grass.repeat.set(10, 10);
     asphalt.repeat.set(1, 1);
     grass.anisotropy = 8;
     asphalt.anisotropy = 8;
@@ -362,6 +380,7 @@ export class World {
     const def = CATALOG_BY_ID[tile.buildingId];
     if (!def || def.isRoad) return;
     const mesh = createBuilding(def, x * 131 + y * 17);
+    mesh.scale.setScalar(1.28);
     const p = tileToWorld(x, y, city.size);
     mesh.position.copy(p);
     mesh.userData.tile = { x, y };
@@ -372,13 +391,13 @@ export class World {
   private ensureRoad(city: City, x: number, y: number): void {
     const p = tileToWorld(x, y, city.size);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x3a3d44,
+      color: 0x5a5e66,
       map: this.asphaltTex,
-      roughness: 0.7,
-      metalness: 0.05,
+      roughness: 0.62,
+      metalness: 0.08,
     });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.98, 0.07, TILE * 0.98), mat);
-    mesh.position.set(p.x, 0.04, p.z);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE * 0.98, 0.1, TILE * 0.98), mat);
+    mesh.position.set(p.x, 0.06, p.z);
     mesh.receiveShadow = true;
     const n = city.get(x, y - 1)?.road;
     const s = city.get(x, y + 1)?.road;
@@ -466,6 +485,9 @@ export class World {
     const p = tileToWorld(x, y, this.size);
     this.ghost.position.copy(p);
     const mesh = this.ghost.children[0] as THREE.Mesh;
+    const h = Math.max(0.2, def.height * 0.45);
+    mesh.scale.set(1, h / 0.15, 1);
+    mesh.position.y = h / 2;
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.set(valid ? 0x3ad4c8 : 0xd4544a);
     mat.emissive.set(valid ? 0x1aa89c : 0x801818);
@@ -505,8 +527,10 @@ export class World {
     this.hemi.intensity = 0.22 + (1 - night) * 0.55;
     this.moon.intensity = 0.08 + night * 0.35;
     this.moon.position.set(-40, 30, -20);
-    const fog = this.scene.fog as THREE.FogExp2;
-    fog.color.set(night > 0.5 ? 0x0d1520 : 0x8aa4b8);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.set(night > 0.5 ? 0x121a24 : 0xb7c9d6);
+    fog.near = night > 0.5 ? 40 : 60;
+    fog.far = night > 0.5 ? 130 : 170;
     this.scene.background = fog.color;
     this.renderer.toneMappingExposure = 0.82 + (1 - night) * 0.28;
     this.bloom.strength = 0.18 + night * 0.32;

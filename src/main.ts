@@ -45,6 +45,7 @@ const hud = new Hud(hudRoot, {
   onMenu: () => {
     persist();
     title.hidden = false;
+    title.style.display = "";
     hudRoot.hidden = true;
     running = false;
     refreshContinue();
@@ -74,6 +75,7 @@ function startCity(next: City): void {
   hud.lockTools(city.population());
   hud.setTool(tool);
   title.hidden = true;
+  title.style.display = "none";
   hudRoot.hidden = false;
   running = true;
   audio.play("whoosh");
