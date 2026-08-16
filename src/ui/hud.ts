@@ -433,7 +433,6 @@ export class Hud {
     this.root.querySelectorAll(".tool, .cat").forEach((b) => b.classList.remove("pulse"));
     if (!id) return;
     const cat = categoryForTool(id);
-    this.openCategory(cat.id);
     this.root.querySelector(`.cat[data-cat="${cat.id}"]`)?.classList.add("pulse");
     this.root.querySelector(`.tool[data-tool="${id}"]`)?.classList.add("pulse");
   }
