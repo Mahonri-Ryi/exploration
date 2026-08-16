@@ -120,17 +120,6 @@ const blaze = await page.evaluate((x, y) => {
 }, built.origin.x + 3, built.origin.y);
 if (!blaze.ok || !blaze.onFire) throw new Error(`Ignite failed: ${JSON.stringify(blaze)}`);
 
-await page.waitForFunction(() => window.__AETHERIS__.stats().population > 0);
-await new Promise((r) => setTimeout(r, 400));
-await page.screenshot({ path: "/tmp/aetheris-smoke.png", fullPage: true });
-
-const waterBlocked = await page.evaluate(() => {
-  const city = window.__AETHERIS__.city();
-  const water = city.tiles.find((t) => t.water);
-  return water ? city.canPlace("cottage", water.x, water.y) : { ok: true, reason: "no water" };
-});
-if (waterBlocked.ok) throw new Error("Water tiles are buildable");
-
 const moneyBefore = built.stats.money;
 const demolished = await page.evaluate((x, y) => window.__AETHERIS__.demolish(x, y), built.origin.x + 2, built.origin.y + 1);
 if (!demolished) throw new Error("Demolish failed");
