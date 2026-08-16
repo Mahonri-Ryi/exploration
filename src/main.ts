@@ -6,7 +6,7 @@ import { tutorialStep } from "./game/tutorial";
 import { hasSave, loadCity, saveCity } from "./game/save";
 import { Hud, toast } from "./ui/hud";
 import { OrbitCam } from "./world/camera";
-import { World, tileToWorld, worldToTile } from "./world/world";
+import { World, tileToWorld } from "./world/world";
 import "./style.css";
 
 const canvas = document.getElementById("viewport") as HTMLCanvasElement;
@@ -205,10 +205,8 @@ function ndc(e: { clientX: number; clientY: number }): THREE.Vector2 {
 }
 
 function hoverTile(e: PointerEvent): { x: number; y: number } | null {
-  const hit = world.pickGround(ndc(e));
-  if (!hit) return null;
-  const t = worldToTile(hit, city.size);
-  if (!city.inBounds(t.x, t.y)) return null;
+  const t = world.pickTile(ndc(e), city.size);
+  if (!t || !city.inBounds(t.x, t.y)) return null;
   return t;
 }
 
@@ -455,7 +453,8 @@ declare global {
       continueTutorial: () => boolean;
       tutorial: () => { done: boolean; index: number; id: string | null };
       achievements: () => string[];
-      project: (x: number, y: number) => { x: number; y: number } | null;
+      project: (x: number, y: number, height?: number) => { x: number; y: number } | null;
+      lookAt: (x: number, y: number) => void;
       hud: () => {
         cityName: string;
         date: string;
@@ -583,9 +582,9 @@ window.__AETHERIS__ = {
     id: tutorialStep(city)?.id ?? null,
   }),
   achievements: () => [...city.completedAchievements],
-  project: (x, y) => {
+  project: (x, y, height = 0) => {
     const p = tileToWorld(x, y, city.size);
-    p.y = 0.15;
+    p.y = height;
     p.project(world.camera);
     if (p.z > 1) return null;
     const r = canvas.getBoundingClientRect();
@@ -593,6 +592,11 @@ window.__AETHERIS__ = {
       x: (p.x * 0.5 + 0.5) * r.width + r.left,
       y: (-p.y * 0.5 + 0.5) * r.height + r.top,
     };
+  },
+  lookAt: (x, y) => {
+    const p = tileToWorld(x, y, city.size);
+    cam.target.set(p.x, 0, p.z);
+    cam.spherical.radius = 28;
   },
   hud: () => readHud(),
 };

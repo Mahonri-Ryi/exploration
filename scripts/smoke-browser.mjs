@@ -53,6 +53,7 @@ async function api(fn, ...args) {
 async function clickSel(sel) {
   await page.waitForSelector(sel, { visible: true });
   await page.click(sel);
+  await settle();
 }
 
 async function clickTool(id) {
@@ -61,10 +62,28 @@ async function clickTool(id) {
   if (tool !== id) throw new Error(`tool is ${tool}, expected ${id}`);
 }
 
+async function settle(ms = 80) {
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  if (ms) await new Promise((r) => setTimeout(r, ms));
+}
+
 async function clickTile(x, y) {
+  await api((tx, ty) => window.__AETHERIS__.lookAt(tx, ty), x, y);
+  await settle(40);
   const pt = await api((tx, ty) => window.__AETHERIS__.project(tx, ty), x, y);
   if (!pt) throw new Error(`tile ${x},${y} is not on screen`);
-  await page.mouse.click(pt.x, pt.y);
+  const box = await page.$eval("#viewport", (el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  });
+  if (pt.x < box.left + 80 || pt.x > box.right - 40 || pt.y < box.top + 90 || pt.y > box.bottom - 90) {
+    await api((tx, ty) => window.__AETHERIS__.lookAt(tx, ty), x, y);
+    await settle(40);
+  }
+  const aimed = await api((tx, ty) => window.__AETHERIS__.project(tx, ty), x, y);
+  if (!aimed) throw new Error(`tile ${x},${y} is not on screen`);
+  await page.mouse.click(aimed.x, aimed.y);
+  await settle();
 }
 
 function findPatch() {
@@ -113,7 +132,11 @@ await check("title screen shows Found City", async () => {
 });
 
 await check("city name field can be typed", async () => {
-  await page.click("#city-input", { clickCount: 3 });
+  await page.focus("#city-input");
+  await page.evaluate(() => {
+    const el = document.getElementById("city-input");
+    if (el instanceof HTMLInputElement) el.value = "";
+  });
   await page.type("#city-input", "Playtest Vale");
   const value = await page.$eval("#city-input", (el) => el.value);
   if (value !== "Playtest Vale") throw new Error(`name is ${value}`);
@@ -154,6 +177,9 @@ await check("Avenue tool click + canvas place lays a road", async () => {
   if (!road) throw new Error("road not placed via canvas click");
   const tutorial = await api(() => window.__AETHERIS__.tutorial());
   if (tutorial.id !== "mill") throw new Error(`primer stayed on ${tutorial.id}`);
+  const done = await api(() => window.__AETHERIS__.city().completedMissions.has("avenue"));
+  if (!done) throw new Error("avenue charter not completed");
+  await settle(120);
   const missions = await api(() => window.__AETHERIS__.hud().missions);
   if (missions.includes("Lay the first avenue")) throw new Error("charter still lists first avenue");
 });
@@ -165,6 +191,24 @@ await check("keyboard 2 selects Avenue and paints a second tile", async () => {
   await clickTile(patch.x + 2, patch.y);
   const road = await api((x, y) => Boolean(window.__AETHERIS__.city().get(x, y)?.road), patch.x + 2, patch.y);
   if (!road) throw new Error("second road missing");
+});
+
+await check("Avenue drag paints a connected stretch", async () => {
+  await api((x, y) => window.__AETHERIS__.lookAt(x, y), patch.x + 1, patch.y + 2);
+  await settle(40);
+  const a = await api((x, y) => window.__AETHERIS__.project(x, y), patch.x + 1, patch.y + 2);
+  const b = await api((x, y) => window.__AETHERIS__.project(x, y), patch.x + 1, patch.y + 3);
+  if (!a || !b) throw new Error("drag tiles not on screen");
+  await clickTool("road");
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 12 });
+  await page.mouse.up();
+  const painted = await api((x, y) => {
+    const city = window.__AETHERIS__.city();
+    return Boolean(city.get(x, y)?.road && city.get(x, y + 1)?.road);
+  }, patch.x + 1, patch.y + 2);
+  if (!painted) throw new Error("drag did not paint two avenue tiles");
 });
 
 await check("Windmill places and feeds the power meter", async () => {
@@ -233,6 +277,19 @@ await check("Raise button upgrades the cottage to a villa", async () => {
   if (hud.inspectTitle !== "Villa") throw new Error(`inspect title ${hud.inspectTitle}`);
   const laurels = await api(() => window.__AETHERIS__.achievements());
   if (!laurels.includes("mason")) throw new Error("mason laurel missing");
+});
+
+await check("clicking a house roof surveys that plot, not the grass behind it", async () => {
+  await clickTool("inspect");
+  await api((x, y) => window.__AETHERIS__.lookAt(x, y), patch.x + 2, patch.y + 1);
+  await settle(40);
+  const roof = await api((x, y) => window.__AETHERIS__.project(x, y, 1.35), patch.x + 2, patch.y + 1);
+  if (!roof) throw new Error("villa roof not on screen");
+  await page.mouse.click(roof.x, roof.y);
+  await settle();
+  const hud = await api(() => window.__AETHERIS__.hud());
+  if (!hud.inspectOpen) throw new Error("inspect did not open from roof click");
+  if (hud.inspectTitle !== "Villa") throw new Error(`roof click surveyed ${hud.inspectTitle}`);
 });
 
 await check("Boutique places and adds jobs to Labor", async () => {
@@ -565,26 +622,45 @@ await check("Laurels panel lists earned trophies", async () => {
 });
 
 await check("phone dock: Charter, Notes, and Look", async () => {
-  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await page.waitForFunction(() => {
+  await page.setViewport({ width: 390, height: 844 });
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+  await settle(200);
+  const layout = await page.evaluate(() => {
+    const dock = document.querySelector(".mobile-dock");
     const btn = document.getElementById("btn-charter");
-    return Boolean(btn && btn.getClientRects().length);
+    return {
+      inner: window.innerWidth,
+      dock: dock ? getComputedStyle(dock).display : "missing",
+      rects: btn ? btn.getClientRects().length : 0,
+    };
   });
-  await clickSel("#btn-charter");
+  if (layout.inner > 900) throw new Error(`viewport stayed wide: ${JSON.stringify(layout)}`);
+  if (layout.dock === "none" || layout.rects === 0) {
+    throw new Error(`phone dock hidden: ${JSON.stringify(layout)}`);
+  }
+  await page.click("#btn-charter");
+  await settle();
   const open = await api(() => window.__AETHERIS__.hud().charterOpen);
   if (!open) throw new Error("charter did not open on phone width");
-  await clickSel("#btn-charter");
+  await page.click("#btn-charter");
+  await settle();
   const closed = await api(() => window.__AETHERIS__.hud().charterOpen);
   if (closed) throw new Error("charter did not close");
-  await clickSel("#btn-notes");
+  await page.click("#btn-notes");
+  await settle();
   const notes = await api(() => window.__AETHERIS__.hud().helpOpen);
   if (!notes) throw new Error("Notes did not open on phone");
-  await clickSel("#btn-notes");
-  await clickSel("#btn-look");
+  await page.click("#btn-notes");
+  await settle();
+  await page.click("#btn-look");
+  await settle();
   const look = await api(() => window.__AETHERIS__.lookMode());
   if (!look) throw new Error("Look did not engage on phone");
-  await clickSel("#btn-look");
-  await page.setViewport({ width: 1440, height: 900, isMobile: false, hasTouch: false });
+  await page.click("#btn-look");
+  await settle();
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+  await settle(120);
 });
 
 await check("Look mode (L) blocks placement", async () => {
