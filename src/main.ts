@@ -83,22 +83,26 @@ function startCity(next: City): void {
 
 async function bootGame(): Promise<void> {
   await world.loadTextures();
-  world.bindCity(city);
+  if (!running) world.bindCity(city);
   refreshContinue();
   boot.remove();
 }
 
-document.getElementById("btn-new")!.addEventListener("click", async () => {
-  await audio.unlock();
+document.getElementById("btn-new")!.addEventListener("click", () => {
   const name = nameInput.value.trim() || "Aetheris";
   startCity(new City(40, name));
   toast(`${name} is founded on the river.`);
+  void audio.unlock();
 });
 
-continueBtn.addEventListener("click", async () => {
-  await audio.unlock();
+continueBtn.addEventListener("click", () => {
   const loaded = loadCity();
-  if (loaded) startCity(loaded);
+  if (!loaded) {
+    toast("No archive remains.");
+    return;
+  }
+  startCity(loaded);
+  void audio.unlock();
 });
 
 title.addEventListener("pointerdown", () => {
@@ -248,3 +252,20 @@ function frame(now: number): void {
 refreshContinue();
 void bootGame();
 requestAnimationFrame(frame);
+
+declare global {
+  interface Window {
+    __AETHERIS__?: {
+      city: () => City;
+      stats: () => ReturnType<City["stats"]>;
+      running: () => boolean;
+      tool: () => ToolId;
+    };
+  }
+}
+window.__AETHERIS__ = {
+  city: () => city,
+  stats: () => city.stats(),
+  running: () => running,
+  tool: () => tool,
+};

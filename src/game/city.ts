@@ -358,9 +358,14 @@ export class City {
       happyTiles += 1;
 
       if (on) {
-        const target = def.residents * (0.35 + (h / 100) * 0.65);
-        if (tile.residents < target) tile.residents = Math.min(def.residents, tile.residents + 1);
-        else if (tile.residents > target + 1) tile.residents -= 1;
+        const target = Math.max(1, Math.round(def.residents * (0.4 + (h / 100) * 0.6)));
+        if (tile.residents === 0) {
+          tile.residents = Math.min(def.residents, Math.max(2, Math.floor(def.residents * 0.35)));
+        } else if (tile.residents < target) {
+          tile.residents = Math.min(def.residents, tile.residents + 2);
+        } else if (tile.residents > target + 1) {
+          tile.residents -= 1;
+        }
       }
     }
 

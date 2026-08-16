@@ -182,11 +182,51 @@ describe("utilities and economy", () => {
     city.place("cottage", x + 2, y);
     const home = city.get(x + 2, y)!;
     expect(home.residents).toBe(0);
-    for (let i = 0; i < 20; i++) city.tick();
+    city.tick();
     expect(home.residents).toBeGreaterThan(0);
+    for (let i = 0; i < 12; i++) city.tick();
+    expect(home.residents).toBeGreaterThan(1);
     const stats = city.stats();
     expect(stats.population).toBeGreaterThan(0);
     expect(stats.powerSupply).toBeGreaterThan(0);
+  });
+
+  it("runs a starter town through taxes and save", () => {
+    const city = new City(24, "Harbor");
+    city.money = 200000;
+    let x = 6;
+    let y = 6;
+    for (let yy = 4; yy < 18; yy++) {
+      for (let xx = 4; xx < 16; xx++) {
+        const tiles = [0, 1, 2, 3].map((i) => city.get(xx + i, yy));
+        if (tiles.every((t) => t && !t.water)) {
+          x = xx;
+          y = yy;
+          break;
+        }
+      }
+    }
+    expect(city.place("power", x, y)).toBe(true);
+    expect(city.place("water", x, y + 1)).toBe(true);
+    expect(city.place("road", x + 1, y)).toBe(true);
+    expect(city.place("road", x + 2, y)).toBe(true);
+    expect(city.place("road", x + 1, y + 1)).toBe(true);
+    expect(city.place("cottage", x + 2, y + 1)).toBe(true);
+    expect(city.place("shop", x + 3, y)).toBe(true);
+    expect(city.place("park", x + 3, y + 1)).toBe(true);
+    for (let i = 0; i < 40; i++) city.tick();
+    const stats = city.stats();
+    expect(stats.population).toBeGreaterThan(0);
+    expect(stats.powerDemand).toBeGreaterThan(0);
+    expect(stats.waterDemand).toBeGreaterThan(0);
+    expect(stats.jobs).toBeGreaterThan(0);
+    const loaded = City.deserialize(city.serialize());
+    expect(loaded.population()).toBe(city.population());
+    expect(loaded.stats().powerSupply).toBe(stats.powerSupply);
+    const home = city.get(x + 2, y + 1)!;
+    const refund = city.demolish(home.x, home.y);
+    expect(refund.ok).toBe(true);
+    expect(city.get(home.x, home.y)?.buildingId).toBeNull();
   });
 
   it("round-trips through serialize", () => {
