@@ -811,6 +811,14 @@ await check("high-quality terrain, water, and facade graphics", async () => {
   if (q.facadeSize < 512) throw new Error(`facade ${q.facadeSize}`);
 });
 
+await check("atmospheric sky, color grade, and rounded buildings", async () => {
+  const q = await api(() => window.__AETHERIS__.graphics());
+  if (!q.atmosphere) throw new Error("Preetham sky missing");
+  if (!q.colorGrade) throw new Error("color grade missing");
+  if (!q.roundedMassing) throw new Error("rounded massing off");
+  if (!q.expFog) throw new Error("exponential fog missing");
+});
+
 await check("Menu then Continue restores the city", async () => {
   await clickSel('[data-speed="0"]');
   const pop = await api(() => window.__AETHERIS__.stats().population);

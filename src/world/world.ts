@@ -1,19 +1,29 @@
 import * as THREE from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { Sky } from "three/addons/objects/Sky.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CATALOG_BY_ID, isWaterTile, type BuildingDef, type InfoLayer } from "../game/catalog";
 import type { City } from "../game/city";
+import { ROUNDED_MASSING, createBuilding, setBuildingNight } from "./buildings";
+import { createColorGradePass } from "./grade";
 import { FACADE_SIZE, makeTerrainMaps, mulberry } from "./textures";
-import { createBuilding, setBuildingNight } from "./buildings";
 
 export const TILE = 2;
 
 function preferLiteGpu(): boolean {
   return window.matchMedia("(max-width: 900px), (pointer: coarse)").matches;
+}
+
+function isSoftwareGL(renderer: THREE.WebGLRenderer): boolean {
+  const gl = renderer.getContext();
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  if (!info) return false;
+  const name = String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) ?? "").toLowerCase();
+  return /swiftshader|llvmpipe|softpipe|software/i.test(name);
 }
 
 export function tileToWorld(x: number, y: number, size: number): THREE.Vector3 {
@@ -58,8 +68,18 @@ export class World {
   private asphaltTex: THREE.Texture | null = null;
   private waterTime = 0;
   private size = 40;
-  private sky: THREE.Mesh;
+  private sky: Sky;
+  private stars: THREE.Points;
   private bloom: UnrealBloomPass;
+  private grade: ReturnType<typeof createColorGradePass>;
+  private ao: GTAOPass | null = null;
+  private pmrem: THREE.PMREMGenerator;
+  private skyProbe = new THREE.Scene();
+  private probeSky: Sky;
+  private envAcc = 0;
+  private clouds: THREE.Group[] = [];
+  private grass: THREE.InstancedMesh | null = null;
+  private fill: THREE.DirectionalLight;
   private overlay: THREE.Mesh;
   private overlayTex: THREE.CanvasTexture | null = null;
   private ghostRing: THREE.Mesh;
@@ -68,7 +88,7 @@ export class World {
   private lastLayer: InfoLayer = "none";
 
   constructor(canvas: HTMLCanvasElement) {
-    this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 450);
     this.camera.position.set(28, 22, 28);
 
     const lite = preferLiteGpu();
@@ -83,18 +103,17 @@ export class World {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.12;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.fog = new THREE.Fog(0xb7c9d6, 55, 160);
-    this.scene.background = new THREE.Color(0x9eb6c8);
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
+    this.scene.fog = new THREE.FogExp2(0xb9cce0, 0.0048);
+    this.scene.background = new THREE.Color(0x8eb6d4);
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
 
-    this.hemi = new THREE.HemisphereLight(0xc8ddf0, 0x3d4a32, 0.7);
+    this.hemi = new THREE.HemisphereLight(0xc8ddf0, 0x3d4a32, 0.55);
     this.scene.add(this.hemi);
 
-    this.sun = new THREE.DirectionalLight(0xffe6c2, 2.6);
+    this.sun = new THREE.DirectionalLight(0xffe6c2, 2.8);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(lite ? 1024 : 2048, lite ? 1024 : 2048);
     this.sun.shadow.camera.near = 1;
@@ -103,54 +122,33 @@ export class World {
     this.sun.shadow.camera.right = 55;
     this.sun.shadow.camera.top = 55;
     this.sun.shadow.camera.bottom = -55;
-    this.sun.shadow.bias = -0.00025;
+    this.sun.shadow.bias = -0.0002;
+    this.sun.shadow.radius = 2.2;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
+
+    this.fill = new THREE.DirectionalLight(0x9ec4e6, 0.35);
+    this.fill.position.set(-30, 18, -22);
+    this.scene.add(this.fill);
 
     this.moon = new THREE.DirectionalLight(0x8aa4d4, 0.15);
     this.scene.add(this.moon);
 
-    const skyGeo = new THREE.SphereGeometry(180, 32, 20);
-    const skyMat = new THREE.ShaderMaterial({
-      side: THREE.BackSide,
-      uniforms: {
-        top: { value: new THREE.Color(0x6eafd8) },
-        mid: { value: new THREE.Color(0xe2c9a4) },
-        bot: { value: new THREE.Color(0x1a2230) },
-        night: { value: 0 },
-        sunDir: { value: new THREE.Vector3(0.4, 0.7, 0.3).normalize() },
-      },
-      vertexShader: `
-        varying vec3 vPos;
-        void main() {
-          vPos = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 top;
-        uniform vec3 mid;
-        uniform vec3 bot;
-        uniform float night;
-        uniform vec3 sunDir;
-        varying vec3 vPos;
-        void main() {
-          vec3 dir = normalize(vPos);
-          float h = dir.y * 0.5 + 0.5;
-          vec3 day = mix(mid, top, smoothstep(0.32, 0.96, h));
-          float sun = pow(max(0.0, dot(dir, normalize(sunDir))), 64.0);
-          float halo = pow(max(0.0, dot(dir, normalize(sunDir))), 8.0);
-          day += vec3(1.0, 0.9, 0.7) * sun * 1.15;
-          day += vec3(1.0, 0.72, 0.42) * halo * 0.22;
-          vec3 nd = mix(bot, vec3(0.04, 0.06, 0.13), smoothstep(0.2, 0.9, h));
-          float star = step(0.997, fract(sin(dot(dir.xy, vec2(12.9898, 78.233))) * 43758.5453));
-          nd += vec3(0.85, 0.9, 1.0) * star * 0.65;
-          gl_FragColor = vec4(mix(day, nd, night), 1.0);
-        }
-      `,
-    });
-    this.sky = new THREE.Mesh(skyGeo, skyMat);
+    this.stars = this.makeStars();
+    this.scene.add(this.stars);
+
+    this.sky = new Sky();
+    this.sky.scale.setScalar(420);
+    const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
+    skyU.turbidity.value = 1.6;
+    skyU.rayleigh.value = 1.45;
+    skyU.mieCoefficient.value = 0.004;
+    skyU.mieDirectionalG.value = 0.9;
     this.scene.add(this.sky);
+
+    this.probeSky = new Sky();
+    this.skyProbe.add(this.probeSky);
+    this.bakeSkyEnv(new THREE.Vector3(40, 50, 20));
 
     const groundMat = new THREE.MeshStandardMaterial({
       color: 0x4d6a3d,
@@ -170,12 +168,7 @@ export class World {
     board.position.y = -0.04;
     this.scene.add(board);
 
-    const grid = new THREE.GridHelper(80, 40, 0xc9a227, 0x6a7a58);
-    grid.position.y = 0.02;
-    const gridMat = grid.material as THREE.LineBasicMaterial;
-    gridMat.transparent = true;
-    gridMat.opacity = 0.1;
-    this.scene.add(grid);
+    this.spawnClouds();
 
     const waterMat = new THREE.ShaderMaterial({
       transparent: true,
@@ -185,6 +178,7 @@ export class World {
         shallow: { value: new THREE.Color(0x4ec8d4) },
         foam: { value: new THREE.Color(0xe8f8fc) },
         sunDir: { value: new THREE.Vector3(0.35, 0.8, 0.25).normalize() },
+        skyReflect: { value: new THREE.Color(0x8ec8e6) },
       },
       vertexShader: `
         uniform float time;
@@ -210,6 +204,7 @@ export class World {
         uniform vec3 foam;
         uniform float time;
         uniform vec3 sunDir;
+        uniform vec3 skyReflect;
         varying vec2 vUv;
         varying float vWave;
         varying vec3 vWorld;
@@ -218,17 +213,17 @@ export class World {
           float caustic = sin((vUv.x + vUv.y) * 42.0 + time * 1.6) * cos(vUv.x * 18.0 - time);
           float edge = smoothstep(0.1, 0.0, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
           vec3 nrm = normalize(vec3(
-            sin(vWorld.x * 2.2 + time) * 0.18,
+            sin(vWorld.x * 2.2 + time) * 0.22,
             1.0,
-            cos(vWorld.z * 2.0 + time * 0.9) * 0.18
+            cos(vWorld.z * 2.0 + time * 0.9) * 0.22
           ));
-          float spec = pow(max(0.0, dot(nrm, normalize(sunDir))), 52.0);
-          float fres = pow(1.0 - max(0.0, nrm.y), 2.4);
-          vec3 col = mix(deep, shallow, 0.42 + n * 0.2 + vWave * 2.2 + caustic * 0.08);
+          float spec = pow(max(0.0, dot(nrm, normalize(sunDir))), 72.0);
+          float fres = pow(1.0 - max(0.0, nrm.y), 2.2);
+          vec3 col = mix(deep, shallow, 0.38 + n * 0.18 + vWave * 2.0 + caustic * 0.08);
+          col = mix(col, skyReflect, fres * 0.55);
           col = mix(col, foam, edge * 0.72);
-          col += vec3(0.86, 0.95, 1.0) * spec * 0.65;
-          col = mix(col, vec3(0.72, 0.88, 0.94), fres * 0.32);
-          gl_FragColor = vec4(col, 0.9);
+          col += vec3(0.92, 0.97, 1.0) * spec * 0.85;
+          gl_FragColor = vec4(col, 0.88);
         }
       `,
     });
@@ -288,8 +283,17 @@ export class World {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), lite ? 0.14 : 0.28, 0.35, 0.82);
+    if (!lite && !isSoftwareGL(this.renderer)) {
+      this.ao = new GTAOPass(this.scene, this.camera);
+      this.ao.output = GTAOPass.OUTPUT.Default;
+      this.ao.blendIntensity = 0.72;
+      this.ao.updateGtaoMaterial({ radius: 0.28, thickness: 1.1, distanceExponent: 1.6 });
+      this.composer.addPass(this.ao);
+    }
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), lite ? 0.12 : 0.24, 0.42, 0.78);
     this.composer.addPass(this.bloom);
+    this.grade = createColorGradePass();
+    this.composer.addPass(this.grade);
     if (!lite) this.composer.addPass(new SMAAPass());
     this.composer.addPass(new OutputPass());
 
@@ -331,9 +335,112 @@ export class World {
     gmat.normalScale.set(0.45, 0.45);
     gmat.color.set(0xd2dec0);
     gmat.roughness = 0.92;
-    gmat.envMapIntensity = 0.35;
+    gmat.envMapIntensity = 0.55;
     gmat.needsUpdate = true;
     void generated.map;
+  }
+
+  private bakeSkyEnv(sun: THREE.Vector3): void {
+    const u = (this.probeSky.material as THREE.ShaderMaterial).uniforms;
+    const src = (this.sky.material as THREE.ShaderMaterial).uniforms;
+    u.sunPosition.value.copy(sun);
+    u.turbidity.value = src.turbidity.value;
+    u.rayleigh.value = src.rayleigh.value;
+    u.mieCoefficient.value = src.mieCoefficient.value;
+    u.mieDirectionalG.value = src.mieDirectionalG.value;
+    const next = this.pmrem.fromScene(this.skyProbe, 0.04).texture;
+    const prev = this.scene.environment;
+    this.scene.environment = next;
+    if (prev && prev !== next) prev.dispose();
+  }
+
+  private makeStars(): THREE.Points {
+    const count = 1600;
+    const pos = new Float32Array(count * 3);
+    const rng = mulberry(404);
+    for (let i = 0; i < count; i++) {
+      const theta = rng() * Math.PI * 2;
+      const phi = Math.acos(0.15 + rng() * 0.85);
+      const r = 200;
+      pos[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+      pos[i * 3 + 1] = Math.abs(Math.cos(phi)) * r;
+      pos[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * r;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xe8f0ff,
+      size: 0.55,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    return points;
+  }
+
+  private spawnClouds(): void {
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xf4f7fb,
+      roughness: 1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    const rng = mulberry(77);
+    for (let i = 0; i < 10; i++) {
+      const g = new THREE.Group();
+      const puffs = 3 + Math.floor(rng() * 3);
+      for (let p = 0; p < puffs; p++) {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(2.4 + rng() * 2.2, 10, 8), mat);
+        puff.position.set((rng() - 0.5) * 6, (rng() - 0.5) * 1.2, (rng() - 0.5) * 3);
+        puff.scale.set(1 + rng() * 0.8, 0.45 + rng() * 0.25, 0.8 + rng() * 0.4);
+        g.add(puff);
+      }
+      g.position.set((rng() - 0.5) * 110, 22 + rng() * 10, (rng() - 0.5) * 90);
+      g.userData.drift = 0.35 + rng() * 0.45;
+      this.scene.add(g);
+      this.clouds.push(g);
+    }
+  }
+
+  private scatterGrass(city: City, rng: () => number): void {
+    if (this.grass) {
+      this.wilds.remove(this.grass);
+      this.grass.dispose();
+      this.grass = null;
+    }
+    const spots: THREE.Vector3[] = [];
+    for (let i = 0; i < 520; i++) {
+      const x = Math.floor(rng() * city.size);
+      const y = Math.floor(rng() * city.size);
+      const tile = city.get(x, y);
+      if (!tile || tile.water || tile.buildingId || tile.road) continue;
+      const p = tileToWorld(x, y, city.size);
+      p.x += (rng() - 0.5) * 1.4;
+      p.z += (rng() - 0.5) * 1.4;
+      p.y = this.heightAt(x, y, city.size);
+      spots.push(p);
+    }
+    if (!spots.length) return;
+    const blade = new THREE.ConeGeometry(0.07, 0.22, 5);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x3f6e32, roughness: 0.95, envMapIntensity: 0.25 });
+    const mesh = new THREE.InstancedMesh(blade, mat, spots.length);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    const dummy = new THREE.Object3D();
+    spots.forEach((p, i) => {
+      dummy.position.set(p.x, p.y + 0.1, p.z);
+      dummy.rotation.y = rng() * Math.PI;
+      dummy.scale.setScalar(0.7 + rng() * 0.9);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    this.grass = mesh;
+    this.wilds.add(mesh);
   }
 
   resize(): void {
@@ -346,6 +453,7 @@ export class World {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.setSize(w, h);
+    this.ao?.setSize(w, h);
   }
 
   bindCity(city: City): void {
@@ -479,6 +587,7 @@ export class World {
       high.setMatrixAt(i, dummy.matrix);
     });
     this.wilds.add(trunk, low, high);
+    this.scatterGrass(city, rng);
   }
 
   rebuildAll(city: City): void {
@@ -913,31 +1022,51 @@ export class World {
     const mat = this.water.material as THREE.ShaderMaterial;
     if (mat.uniforms?.time) mat.uniforms.time.value = this.waterTime;
 
-    const phase = city.dayPhase();
-    const sunAngle = phase * Math.PI * 2 - Math.PI / 2;
-    const elev = Math.sin(sunAngle);
+    const phase = this.visualPhase(city);
+    const elevAngle = phase * Math.PI * 2 - Math.PI / 2;
+    const elev = Math.sin(elevAngle);
     const night = THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
-    const skyMat = this.sky.material as THREE.ShaderMaterial;
-    skyMat.uniforms.night.value = night;
-    const sunPos = new THREE.Vector3(Math.cos(sunAngle) * 60, Math.max(4, elev * 50 + 8), Math.sin(sunAngle) * 40);
+    const az = elevAngle + Math.PI;
+    const sunPos = new THREE.Vector3(Math.cos(az) * 60, Math.max(6, elev * 50 + 10), Math.sin(az) * 40);
+    const skySun = new THREE.Vector3(Math.cos(az), elev, Math.sin(az) * 0.75).normalize().multiplyScalar(100);
     const sunDir = sunPos.clone().normalize();
-    if (skyMat.uniforms.sunDir) skyMat.uniforms.sunDir.value.copy(sunDir);
+    const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
+    skyU.sunPosition.value.copy(skySun);
+    skyU.turbidity.value = 1.5 + night * 3.2;
+    skyU.rayleigh.value = 1.45 - night * 0.55;
     const waterMat = this.water.material as THREE.ShaderMaterial;
     if (waterMat.uniforms?.sunDir) waterMat.uniforms.sunDir.value.copy(sunDir);
+    if (waterMat.uniforms?.skyReflect) {
+      waterMat.uniforms.skyReflect.value.set(night > 0.5 ? 0x1a2838 : 0x8ec8e6);
+    }
     this.sun.position.copy(sunPos);
     this.sun.target.position.set(0, 0, 0);
-    this.sun.intensity = 0.35 + (1 - night) * 2.35;
-    this.sun.color.set(night > 0.55 ? 0xff9a62 : elev > 0.15 ? 0xffe4b8 : 0xffc08a);
-    this.hemi.intensity = 0.28 + (1 - night) * 0.62;
-    this.moon.intensity = 0.08 + night * 0.35;
+    this.sun.intensity = 0.2 + (1 - night) * 2.6;
+    this.sun.color.set(night > 0.55 ? 0xff9a62 : elev > 0.15 ? 0xffe8c4 : 0xffb07a);
+    this.hemi.intensity = 0.22 + (1 - night) * 0.42;
+    this.fill.intensity = 0.12 + (1 - night) * 0.28;
+    this.moon.intensity = 0.08 + night * 0.42;
     this.moon.position.set(-40, 30, -20);
-    const fog = this.scene.fog as THREE.Fog;
-    fog.color.set(night > 0.5 ? 0x121a24 : 0xb7c9d6);
-    fog.near = night > 0.5 ? 40 : 60;
-    fog.far = night > 0.5 ? 130 : 170;
+    const fog = this.scene.fog as THREE.FogExp2;
+    fog.color.set(night > 0.55 ? 0x101820 : elev < 0.12 ? 0xc4a888 : 0xb9cce0);
+    fog.density = night > 0.5 ? 0.007 : 0.0042;
     this.scene.background = fog.color;
-    this.renderer.toneMappingExposure = 0.82 + (1 - night) * 0.28;
-    this.bloom.strength = preferLiteGpu() ? 0.08 + night * 0.16 : 0.18 + night * 0.32;
+    this.renderer.toneMappingExposure = 0.95 + (1 - night) * 0.32;
+    this.bloom.strength = preferLiteGpu() ? 0.08 + night * 0.18 : 0.16 + night * 0.28;
+    if (this.grade.uniforms.time) this.grade.uniforms.time.value = this.waterTime;
+    if (this.grade.uniforms.night) this.grade.uniforms.night.value = night;
+    const starMat = this.stars.material as THREE.PointsMaterial;
+    starMat.opacity = night * 0.85;
+    this.stars.visible = night > 0.15;
+    this.envAcc += dt;
+    if (this.envAcc > 1.8) {
+      this.envAcc = 0;
+      this.bakeSkyEnv(skySun);
+    }
+    for (const cloud of this.clouds) {
+      cloud.position.x += dt * (cloud.userData.drift as number);
+      if (cloud.position.x > 70) cloud.position.x = -70;
+    }
 
     for (const [, b] of this.buildings) {
       setBuildingNight(b, night);
@@ -997,6 +1126,11 @@ export class World {
     facadeSize: number;
     bloom: number;
     pixelRatio: number;
+    atmosphere: boolean;
+    colorGrade: boolean;
+    ao: boolean;
+    roundedMassing: boolean;
+    expFog: boolean;
   } {
     const gmat = this.ground.material as THREE.MeshStandardMaterial;
     let facadeW = 0;
@@ -1018,11 +1152,22 @@ export class World {
       facadeSize: facadeW || FACADE_SIZE,
       bloom: this.bloom.strength,
       pixelRatio: this.renderer.getPixelRatio(),
+      atmosphere: this.sky.material instanceof THREE.ShaderMaterial &&
+        Boolean((this.sky.material as THREE.ShaderMaterial).uniforms.rayleigh),
+      colorGrade: Boolean(this.grade),
+      ao: Boolean(this.ao),
+      roundedMassing: ROUNDED_MASSING,
+      expFog: this.scene.fog instanceof THREE.FogExp2,
     };
   }
 
+  /** Offset so a new city opens in late morning, not midnight. */
+  private visualPhase(city: City): number {
+    return (city.dayPhase() + 0.42) % 1;
+  }
+
   nightAmount(city: City): number {
-    const phase = city.dayPhase();
+    const phase = this.visualPhase(city);
     const elev = Math.sin(phase * Math.PI * 2 - Math.PI / 2);
     return THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
   }
