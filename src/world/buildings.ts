@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDef } from "../game/catalog";
-import { makeFacadeTexture, makeWindowTexture, mulberry } from "./textures";
+import { makeFacadeMaps, makeRoofTexture, makeWindowTexture, mulberry } from "./textures";
 
 const matCache = new Map<string, THREE.Material>();
 
@@ -46,12 +46,14 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
   g.name = def.id;
   const rng = mulberry(seed + def.id.length * 17);
   const facade = mat(`facade-${def.id}-${(seed % 5) | 0}`, () => {
-    const tex = makeFacadeTexture(hex(def.color), seed);
+    const maps = makeFacadeMaps(hex(def.color), seed);
     return new THREE.MeshStandardMaterial({
-      map: tex,
+      map: maps.map,
+      roughnessMap: maps.roughnessMap,
       color: def.color,
-      roughness: 0.72,
-      metalness: 0.08,
+      roughness: 0.78,
+      metalness: 0.04,
+      envMapIntensity: 0.85,
     });
   });
   const glass = mat(
@@ -67,21 +69,28 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
       }),
   );
   const roof = mat(`roof-${def.category}`, () => {
+    const kind = def.category === "residential" ? "tile" : def.category === "industrial" ? "metal" : "slate";
     const color =
       def.category === "residential"
-        ? 0x6b2e24
+        ? 0x8a3a2c
         : def.category === "industrial"
-          ? 0x3c3a38
-          : 0x2f3a44;
-    return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.2 });
+          ? 0x4a4c50
+          : 0x3a4654;
+    return new THREE.MeshStandardMaterial({
+      map: makeRoofTexture(kind, seed),
+      color,
+      roughness: kind === "metal" ? 0.38 : 0.72,
+      metalness: kind === "metal" ? 0.45 : 0.08,
+      envMapIntensity: 0.9,
+    });
   });
-  const stone = mat("stone", () => new THREE.MeshStandardMaterial({ color: 0xcfc4b0, roughness: 0.8 }));
+  const stone = mat("stone", () => new THREE.MeshStandardMaterial({ color: 0xcfc4b0, roughness: 0.82, envMapIntensity: 0.55 }));
   const trim = mat(
     "gold",
-    () => new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.7, roughness: 0.28 }),
+    () => new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.78, roughness: 0.22, envMapIntensity: 1.2 }),
   );
-  const dark = mat("dark", () => new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.5, metalness: 0.3 }));
-  const foliage = mat("foliage", () => new THREE.MeshStandardMaterial({ color: 0x2f6a3a, roughness: 0.9 }));
+  const dark = mat("dark", () => new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.48, metalness: 0.32 }));
+  const foliage = mat("foliage", () => new THREE.MeshStandardMaterial({ color: 0x2f6a3a, roughness: 0.92, envMapIntensity: 0.4 }));
   const nightWin = makeWindowTexture(6, 8, seed, true);
   const dayWin = makeWindowTexture(6, 8, seed, false);
   const windowMat = new THREE.MeshStandardMaterial({
@@ -89,29 +98,32 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
     emissiveMap: nightWin,
     emissive: new THREE.Color(0xffd27a),
     emissiveIntensity: 0,
-    roughness: 0.35,
-    metalness: 0.15,
+    roughness: 0.22,
+    metalness: 0.28,
+    envMapIntensity: 1.15,
   });
   g.userData.windowMat = windowMat;
 
   switch (def.id) {
     case "cottage": {
-      g.add(box(1.35, 0.72, 1.15, facade));
-      const r = new THREE.Mesh(new THREE.ConeGeometry(1.05, 0.55, 4), roof);
-      r.position.y = 1.02;
+      g.add(box(1.42, 0.1, 1.22, stone));
+      g.add(box(1.35, 0.72, 1.15, facade, 0.1));
+      const r = new THREE.Mesh(new THREE.ConeGeometry(1.12, 0.58, 4), roof);
+      r.position.y = 1.12;
       r.rotation.y = Math.PI / 4;
       r.castShadow = true;
       g.add(r);
-      g.add(place(box(0.18, 0.32, 0.18, dark, 0.95), 0.35, 0.15));
-      g.add(place(box(0.22, 0.38, 0.06, dark, 0), 0, 0.58));
-      g.add(place(box(0.28, 0.22, 0.04, glass, 0.32), -0.38, 0.58));
-      g.add(place(box(0.28, 0.22, 0.04, glass, 0.32), 0.38, 0.58));
+      g.add(place(box(0.18, 0.32, 0.18, dark, 1.05), 0.35, 0.15));
+      g.add(place(box(0.22, 0.38, 0.06, dark, 0.1), 0, 0.58));
+      g.add(place(box(0.28, 0.22, 0.04, glass, 0.42), -0.38, 0.58));
+      g.add(place(box(0.28, 0.22, 0.04, glass, 0.42), 0.38, 0.58));
       addTree(g, foliage, dark, -0.7, 0.45, rng);
       break;
     }
     case "villa": {
-      g.add(box(1.5, 0.7, 1.15, facade));
-      g.add(place(box(0.85, 0.95, 0.8, facade), 0.4, 0.15));
+      g.add(box(1.58, 0.1, 1.22, stone));
+      g.add(box(1.5, 0.7, 1.15, facade, 0.1));
+      g.add(place(box(0.85, 0.95, 0.8, facade, 0.1), 0.4, 0.15));
       const r = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.45, 4), roof);
       r.rotation.y = Math.PI / 4;
       r.position.set(-0.1, 1.05, 0);

@@ -742,13 +742,73 @@ await check("levy slider changes the tax rate", async () => {
   if (Math.abs(rate - 0.14) > 0.001) throw new Error(`taxRate ${rate}`);
 });
 
+await check("cinematic SFX files decode as stereo", async () => {
+  const report = await page.evaluate(async () => {
+    await window.__AETHERIS__.audio.unlock();
+    return window.__AETHERIS__.audio.report();
+  });
+  if (!report.ready) throw new Error("audio engine not ready");
+  const need = [
+    "ui_click",
+    "ui_hover",
+    "place",
+    "construction",
+    "demolish",
+    "error",
+    "coin",
+    "unlock",
+    "whoosh",
+    "fire",
+    "ambient_day",
+    "ambient_night",
+  ];
+  for (const name of need) {
+    const buf = report.buffers.find((b) => b.name === name);
+    if (!buf) throw new Error(`missing buffer ${name}`);
+    if (buf.channels !== 2) throw new Error(`${name} channels ${buf.channels}`);
+    if (buf.duration < 0.04) throw new Error(`${name} too short ${buf.duration}`);
+    if (buf.sampleRate < 44100) throw new Error(`${name} sampleRate ${buf.sampleRate}`);
+  }
+  const whoosh = report.buffers.find((b) => b.name === "whoosh");
+  if (whoosh.duration < 0.8) throw new Error(`whoosh duration ${whoosh.duration}`);
+  const day = report.buffers.find((b) => b.name === "ambient_day");
+  if (day.duration < 6) throw new Error(`ambient_day duration ${day.duration}`);
+});
+
+await check("place and UI SFX play through the audio API", async () => {
+  await api(() => window.__AETHERIS__.audio.play("place"));
+  const afterPlace = await api(() => window.__AETHERIS__.audio.report().lastPlayed);
+  if (afterPlace !== "place") throw new Error(`lastPlayed ${afterPlace}`);
+  await api(() => window.__AETHERIS__.audio.play("ui_click"));
+  const afterClick = await api(() => window.__AETHERIS__.audio.report().lastPlayed);
+  if (afterClick !== "ui_click") throw new Error(`lastPlayed ${afterClick}`);
+});
+
 await check("mute and save buttons respond", async () => {
   await clickSel("#btn-mute");
   const muted = await page.$eval("#btn-mute", (el) => el.textContent);
   if (muted !== "🔇") throw new Error(`mute label ${muted}`);
+  const report = await api(() => window.__AETHERIS__.audio.report());
+  if (!report.muted) throw new Error("engine not muted after mute button");
+  await api(() => window.__AETHERIS__.audio.play("error"));
+  const last = await api(() => window.__AETHERIS__.audio.report().lastPlayed);
+  if (last !== "error") throw new Error(`muted play did not record error, got ${last}`);
+  await clickSel("#btn-mute");
+  const unmuted = await api(() => window.__AETHERIS__.audio.report().muted);
+  if (unmuted) throw new Error("still muted after toggle");
   await clickSel("#btn-save");
   const saved = await api(() => Boolean(localStorage.getItem("aetheris.save.v1")));
   if (!saved) throw new Error("save key missing");
+});
+
+await check("high-quality terrain, water, and facade graphics", async () => {
+  const q = await api(() => window.__AETHERIS__.graphics());
+  if (q.toneMapping !== "ACESFilmic") throw new Error(`toneMapping ${q.toneMapping}`);
+  if (!q.terrainMap) throw new Error("terrain map missing");
+  if (!q.terrainNormal) throw new Error("terrain normal missing");
+  if (q.terrainAnisotropy < 4) throw new Error(`anisotropy ${q.terrainAnisotropy}`);
+  if (!q.waterShader) throw new Error("water is not a shader");
+  if (q.facadeSize < 512) throw new Error(`facade ${q.facadeSize}`);
 });
 
 await check("Menu then Continue restores the city", async () => {

@@ -1,271 +1,333 @@
 #!/usr/bin/env python3
-"""Generate cinematic SFX and ambient loops for Aetheris."""
+"""Cinematic SFX + ambience for Aetheris (layered synthesis, no stock beeps)."""
 
 from __future__ import annotations
 
 import math
 import os
-import struct
 import subprocess
+import tempfile
 import wave
-from pathlib import Path
 
 import numpy as np
 
-SR = 44100
-OUT = Path("/workspace/public/assets/audio")
-OUT.mkdir(parents=True, exist_ok=True)
+SR = 48000
+OUT = "/workspace/public/assets/audio"
+os.makedirs(OUT, exist_ok=True)
 
 
-def write_wav(path: Path, samples: np.ndarray, stereo: bool = False) -> None:
-    samples = np.nan_to_num(samples)
-    samples = np.clip(samples, -1.0, 1.0)
-    if samples.ndim == 1 and stereo:
-        samples = np.stack([samples, samples], axis=1)
-    if samples.ndim == 2:
-        nch = 2
-        frames = (samples * 32767.0).astype(np.int16)
-        raw = frames.tobytes()
-    else:
-        nch = 1
-        raw = (samples * 32767.0).astype(np.int16).tobytes()
-    with wave.open(str(path), "w") as w:
-        w.setnchannels(nch)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(raw)
-
-
-def t(n: int) -> np.ndarray:
-    return np.arange(n, dtype=np.float64) / SR
-
-
-def adsr(n: int, a=0.01, d=0.08, s=0.55, r=0.2) -> np.ndarray:
-    env = np.zeros(n, dtype=np.float64)
-    na, nd, nr = int(a * SR), int(d * SR), int(r * SR)
-    ns = max(0, n - na - nd - nr)
-    i = 0
-    if na:
-        env[i : i + na] = np.linspace(0, 1, na, endpoint=False)
-        i += na
-    if nd:
-        env[i : i + nd] = np.linspace(1, s, nd, endpoint=False)
-        i += nd
-    if ns:
-        env[i : i + ns] = s
-        i += ns
-    if nr and i < n:
-        env[i:] = np.linspace(s, 0, n - i)
+def fade(n: int, a: int, r: int) -> np.ndarray:
+    env = np.ones(n, dtype=np.float64)
+    a = max(1, min(a, n // 3))
+    r = max(1, min(r, n - a))
+    env[:a] *= np.linspace(0, 1, a) ** 1.6
+    env[-r:] *= np.linspace(1, 0, r) ** 1.35
     return env
 
 
-def sine(tt: np.ndarray, freq: float, phase: float = 0.0) -> np.ndarray:
-    return np.sin(2 * math.pi * freq * tt + phase)
-
-
-def noise(n: int) -> np.ndarray:
-    return np.random.default_rng(7).uniform(-1, 1, n)
-
-
-def lowpass(x: np.ndarray, alpha: float) -> np.ndarray:
+def hp(x: np.ndarray, cutoff: float) -> np.ndarray:
+    rc = 1.0 / (2 * math.pi * float(np.asarray(cutoff).reshape(-1)[0]))
+    a = rc / (rc + 1.0 / SR)
     y = np.empty_like(x)
+    prev_x = 0.0
+    prev_y = 0.0
+    for i, s in enumerate(x):
+        prev_y = a * (prev_y + s - prev_x)
+        prev_x = float(s)
+        y[i] = prev_y
+    return y
+
+
+def hp_sweep(x: np.ndarray, lo: float, hi: float, power: float = 1.4) -> np.ndarray:
+    t = np.linspace(0.0, 1.0, len(x))
+    cutoff = lo + (hi - lo) * (t**power)
+    y = np.empty_like(x)
+    prev_x = 0.0
+    prev_y = 0.0
+    inv_sr = 1.0 / SR
+    two_pi = 2 * math.pi
+    for i, s in enumerate(x):
+        rc = 1.0 / (two_pi * max(40.0, float(cutoff[i])))
+        a = rc / (rc + inv_sr)
+        prev_y = a * (prev_y + s - prev_x)
+        prev_x = float(s)
+        y[i] = prev_y
+    return y
+
+
+def lp(x: np.ndarray, cutoff: float) -> np.ndarray:
+    rc = 1.0 / (2 * math.pi * cutoff)
+    a = (1.0 / SR) / (rc + 1.0 / SR)
+    y = np.zeros_like(x)
     acc = 0.0
-    for i, v in enumerate(x):
-        acc = acc + alpha * (v - acc)
+    for i, s in enumerate(x):
+        acc += a * (s - acc)
         y[i] = acc
     return y
 
 
-def highpass(x: np.ndarray, alpha: float) -> np.ndarray:
-    return x - lowpass(x, alpha)
+def bp(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    return lp(hp(x, lo), hi)
 
 
-def fade_edges(x: np.ndarray, ms: float = 40) -> np.ndarray:
-    n = max(1, int(SR * ms / 1000))
-    n = min(n, len(x) // 2)
-    env = np.ones_like(x)
-    env[:n] = np.linspace(0, 1, n)
-    env[-n:] = np.linspace(1, 0, n)
-    return x * env
+def sine(n: int, freq: float, phase: float = 0.0) -> np.ndarray:
+    t = np.arange(n) / SR
+    return np.sin(2 * math.pi * freq * t + phase)
 
 
-def to_ogg(wav: Path) -> None:
-    ogg = wav.with_suffix(".ogg")
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(wav), "-c:a", "libvorbis", "-q:a", "5", str(ogg)],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+def exp_decay(n: int, ms: float) -> np.ndarray:
+    tau = max(0.004, ms / 1000.0)
+    return np.exp(-np.arange(n) / (SR * tau))
+
+
+def noise(n: int) -> np.ndarray:
+    return np.random.default_rng(7).standard_normal(n)
+
+
+def noise_seed(n: int, seed: int) -> np.ndarray:
+    return np.random.default_rng(seed).standard_normal(n)
+
+
+def soft_clip(x: np.ndarray, drive: float = 1.15) -> np.ndarray:
+    return np.tanh(x * drive)
+
+
+def stereo(mono: np.ndarray, width: float = 0.18) -> np.ndarray:
+    n = len(mono)
+    delay = int(SR * 0.0007)
+    right = np.zeros(n)
+    right[delay:] = mono[:-delay] if delay < n else 0
+    mid = mono
+    side = (right - mono) * width
+    L = mid - side
+    R = mid + side
+    return np.stack([L, R], axis=1)
+
+
+def limiter(x: np.ndarray, ceiling: float = 0.89) -> np.ndarray:
+    peak = np.max(np.abs(x))
+    if peak < 1e-9:
+        return x
+    gain = min(1.0, ceiling / peak)
+    return x * gain
+
+
+def write_wav(path: str, stereo_or_mono: np.ndarray) -> None:
+    data = np.asarray(stereo_or_mono, dtype=np.float64)
+    if data.ndim == 1:
+        data = stereo(data, 0.12)
+    data = limiter(data)
+    pcm = np.clip(data, -1, 1)
+    interleaved = (pcm * 32767.0).astype(np.int16).reshape(-1)
+    with wave.open(path, "w") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(interleaved.tobytes())
+
+
+def encode(name: str, samples: np.ndarray) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = os.path.join(tmp, f"{name}.wav")
+        write_wav(wav, samples)
+        dest = os.path.join(OUT, f"{name}.ogg")
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                wav,
+                "-c:a",
+                "libvorbis",
+                "-q:a",
+                "7",
+                dest,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    print("wrote", dest, os.path.getsize(dest))
+
+
+def mix(*parts: np.ndarray) -> np.ndarray:
+    n = max(len(p) for p in parts)
+    out = np.zeros(n)
+    for p in parts:
+        out[: len(p)] += p
+    return out
+
+
+def room(x: np.ndarray, delay_ms: float = 26.0, mix: float = 0.2) -> np.ndarray:
+    d = max(1, int(SR * delay_ms / 1000.0))
+    y = np.zeros(len(x) + d * 3)
+    y[: len(x)] += x
+    y[d : d + len(x)] += x * mix
+    y[d * 2 : d * 2 + len(x)] += x * mix * 0.42
+    y[d * 3 : d * 3 + len(x)] += x * mix * 0.18
+    return y
+
+
+# --- SFX -------------------------------------------------------------------
+
+
+def sfx_ui_click() -> np.ndarray:
+    n = int(SR * 0.11)
+    body = bp(noise_seed(n, 11), 900, 2800) * exp_decay(n, 18) * 0.55
+    tick = sine(n, 1840) * exp_decay(n, 8) * 0.12
+    wood = bp(noise_seed(n, 19), 220, 700) * exp_decay(n, 28) * 0.35
+    return soft_clip(mix(body, tick, wood) * fade(n, 8, 90) * 0.72)
+
+
+def sfx_ui_hover() -> np.ndarray:
+    n = int(SR * 0.06)
+    air = bp(noise_seed(n, 3), 2400, 6200) * exp_decay(n, 12) * 0.22
+    ping = sine(n, 2620) * exp_decay(n, 9) * 0.05
+    return mix(air, ping) * fade(n, 6, 40) * 0.55
+
+
+def sfx_place() -> np.ndarray:
+    n = int(SR * 0.42)
+    thump = lp(sine(n, 72) * exp_decay(n, 90) + sine(n, 118) * exp_decay(n, 55) * 0.45, 240)
+    clack = bp(noise_seed(n, 41), 700, 2400) * exp_decay(n, 22) * 0.7
+    grit = bp(noise_seed(n, 42), 180, 900) * exp_decay(n, 70) * 0.28
+    air = hp(noise_seed(n, 43), 4000) * exp_decay(n, 40) * 0.08
+    return room(soft_clip(mix(thump * 0.85, clack, grit, air) * fade(n, 12, 220) * 0.78), 22, 0.16)
+
+
+def sfx_construction() -> np.ndarray:
+    n = int(SR * 0.55)
+    hammer = mix(
+        lp(sine(n, 96) * exp_decay(n, 40), 300) * 0.7,
+        bp(noise_seed(n, 51), 800, 3200) * exp_decay(n, 16) * 0.85,
     )
-    wav.unlink()
+    wood = bp(noise_seed(n, 52), 250, 1100) * exp_decay(n, 80) * 0.4
+    second = np.zeros(n)
+    offset = int(SR * 0.09)
+    hit2 = bp(noise_seed(n - offset, 53), 900, 2800) * exp_decay(n - offset, 14) * 0.45
+    second[offset:] = hit2
+    return room(soft_clip(mix(hammer, wood, second) * fade(n, 10, 260) * 0.74), 24, 0.18)
 
 
-def ui_click() -> np.ndarray:
-    n = int(0.09 * SR)
-    tt = t(n)
-    sig = 0.55 * sine(tt, 1840) * adsr(n, 0.002, 0.02, 0.15, 0.06)
-    sig += 0.22 * sine(tt, 2760) * adsr(n, 0.001, 0.015, 0.1, 0.05)
-    sig += 0.08 * highpass(noise(n), 0.35) * adsr(n, 0.001, 0.01, 0.05, 0.03)
-    return fade_edges(sig, 4)
+def sfx_demolish() -> np.ndarray:
+    n = int(SR * 0.7)
+    rumble = lp(noise_seed(n, 61), 180) * exp_decay(n, 220) * 0.9
+    crack = bp(noise_seed(n, 62), 600, 3500)
+    crack *= (exp_decay(n, 18) + 0.35 * exp_decay(n, 90))
+    debris = hp(noise_seed(n, 63), 1800) * exp_decay(n, 160) * 0.22
+    return room(soft_clip(mix(rumble, crack * 0.55, debris) * fade(n, 8, 320) * 0.8), 30, 0.22)
 
 
-def ui_hover() -> np.ndarray:
-    n = int(0.06 * SR)
-    tt = t(n)
-    return fade_edges(0.28 * sine(tt, 1320) * adsr(n, 0.002, 0.015, 0.2, 0.04), 3)
+def sfx_error() -> np.ndarray:
+    n = int(SR * 0.28)
+    t = np.arange(n) / SR
+    a = sine(n, 196) * np.exp(-t * 9) * 0.28
+    b = sine(n, 147) * np.exp(-t * 7)
+    b[: int(SR * 0.05)] = 0
+    body = lp(a + b * 0.32, 420)
+    air = bp(noise_seed(n, 71), 400, 1400) * exp_decay(n, 40) * 0.12
+    return mix(body, air) * fade(n, 20, 140) * 0.7
 
 
-def place() -> np.ndarray:
-    n = int(0.42 * SR)
-    tt = t(n)
-    thump = 0.7 * sine(tt, 92) * adsr(n, 0.004, 0.06, 0.2, 0.28)
-    thump += 0.35 * sine(tt, 180) * adsr(n, 0.003, 0.05, 0.15, 0.2)
-    grit = 0.18 * lowpass(noise(n), 0.18) * adsr(n, 0.002, 0.04, 0.12, 0.18)
-    chime = 0.18 * sine(tt, 784) * adsr(n, 0.01, 0.08, 0.2, 0.28)
-    chime += 0.12 * sine(tt, 1176) * adsr(n, 0.012, 0.1, 0.15, 0.26)
-    return fade_edges(thump + grit + chime, 8)
-
-
-def demolish() -> np.ndarray:
-    n = int(0.7 * SR)
-    tt = t(n)
-    rumble = 0.7 * lowpass(noise(n), 0.08) * adsr(n, 0.01, 0.12, 0.4, 0.4)
-    rumble += 0.35 * sine(tt, 55) * adsr(n, 0.005, 0.1, 0.3, 0.4)
-    crash = 0.28 * highpass(noise(n), 0.25) * adsr(n, 0.002, 0.08, 0.2, 0.35)
-    return fade_edges(rumble + crash, 12)
-
-
-def error() -> np.ndarray:
-    n = int(0.28 * SR)
-    tt = t(n)
-    sig = 0.32 * sine(tt, 196) * adsr(n, 0.004, 0.05, 0.4, 0.16)
-    sig += 0.22 * sine(tt, 233) * adsr(n, 0.004, 0.05, 0.35, 0.16)
-    return fade_edges(sig, 6)
-
-
-def coin() -> np.ndarray:
-    n = int(0.38 * SR)
-    tt = t(n)
-    sig = 0.28 * sine(tt, 988) * adsr(n, 0.004, 0.05, 0.25, 0.22)
-    sig += 0.22 * sine(tt, 1318.5) * np.concatenate(
-        [np.zeros(int(0.05 * SR)), adsr(n - int(0.05 * SR), 0.004, 0.06, 0.2, 0.2)]
+def sfx_coin() -> np.ndarray:
+    n = int(SR * 0.38)
+    partials = (
+        sine(n, 987) * 0.22
+        + sine(n, 1480) * 0.12
+        + sine(n, 2210) * 0.07
+        + sine(n, 3120) * 0.04
     )
-    return fade_edges(sig, 6)
+    metallic = partials * exp_decay(n, 95)
+    shimmer = bp(noise_seed(n, 81), 3000, 9000) * exp_decay(n, 35) * 0.08
+    return soft_clip(mix(metallic, shimmer) * fade(n, 10, 180) * 0.62, 1.05)
 
 
-def unlock() -> np.ndarray:
-    n = int(1.15 * SR)
-    tt = t(n)
-    notes = [523.25, 659.25, 783.99, 1046.5]
-    sig = np.zeros(n)
-    for i, f in enumerate(notes):
-        start = int(0.12 * i * SR)
-        length = n - start
-        tone = 0.18 * sine(t(length), f) * adsr(length, 0.01, 0.12, 0.35, 0.55)
-        tone += 0.08 * sine(t(length), f * 2) * adsr(length, 0.012, 0.14, 0.2, 0.5)
-        sig[start:] += tone
-    return fade_edges(sig, 20)
+def sfx_unlock() -> np.ndarray:
+    n = int(SR * 0.85)
+    t = np.arange(n) / SR
+    chord = (
+        sine(n, 392) * np.exp(-t * 3.2)
+        + sine(n, 523.25) * np.exp(-t * 2.8) * 0.7
+        + sine(n, 659.25) * np.exp(-t * 2.4) * 0.45
+        + sine(n, 784) * np.exp(-t * 3.6) * 0.28
+    )
+    bloom = bp(noise_seed(n, 91), 200, 1800) * exp_decay(n, 180) * 0.12
+    spark = hp(noise_seed(n, 92), 5000) * exp_decay(n, 50) * 0.06
+    return room(soft_clip(mix(chord * 0.42, bloom, spark) * fade(n, 40, 380) * 0.7), 38, 0.24)
 
 
-def whoosh() -> np.ndarray:
-    n = int(0.55 * SR)
-    base = highpass(lowpass(noise(n), 0.35), 0.08)
-    env = adsr(n, 0.08, 0.15, 0.5, 0.28)
-    return fade_edges(0.35 * base * env, 10)
+def sfx_whoosh() -> np.ndarray:
+    n = int(SR * 1.15)
+    t = np.arange(n) / SR
+    sweep = hp_sweep(noise_seed(n, 101), 180, 5200, 1.35)
+    sweep *= np.sin(math.pi * np.clip(t / 1.05, 0, 1)) ** 1.2
+    body = lp(noise_seed(n, 102), 320) * np.sin(math.pi * t / 1.15) * 0.35
+    return room(soft_clip(mix(sweep * 0.55, body) * fade(n, 80, 220) * 0.72), 32, 0.2)
 
 
-def construction() -> np.ndarray:
-    n = int(0.5 * SR)
-    tt = t(n)
-    hit = 0.45 * sine(tt, 140) * adsr(n, 0.002, 0.04, 0.15, 0.2)
-    hit += 0.2 * highpass(noise(n), 0.3) * adsr(n, 0.001, 0.03, 0.1, 0.12)
-    return fade_edges(hit, 6)
-
-
-def fire() -> np.ndarray:
-    n = int(0.85 * SR)
-    rng = np.random.default_rng(91)
-    raw = rng.uniform(-1, 1, n)
-    rumble = lowpass(raw, 0.18)
-    tt = t(n)
-    env = np.exp(-tt * 1.6) * (0.55 + 0.45 * sine(tt, 6))
-    sig = 0.45 * rumble * env
-    for _ in range(18):
-        start = int(rng.uniform(0.02, 0.72) * SR)
-        length = int(rng.uniform(0.012, 0.045) * SR)
-        burst = np.hanning(length) * rng.uniform(-1, 1, length) * rng.uniform(0.15, 0.35)
-        end = min(n, start + length)
-        sig[start:end] += burst[: end - start]
-    sig += 0.18 * sine(tt, 70) * env
-    return fade_edges(sig * 0.9, 40)
+def sfx_fire() -> np.ndarray:
+    n = int(SR * 0.9)
+    roar = lp(noise_seed(n, 111), 280) * 0.55
+    pops = np.zeros(n)
+    rng = np.random.default_rng(112)
+    for _ in range(14):
+        i = int(rng.integers(0, n - 800))
+        burst = bp(noise_seed(900, 113 + i), 1200, 6000) * exp_decay(900, 12) * rng.uniform(0.15, 0.4)
+        pops[i : i + 900] += burst
+    hiss = hp(noise_seed(n, 114), 3500) * 0.08
+    return soft_clip(mix(roar, pops, hiss) * fade(n, 40, 160) * 0.7)
 
 
 def ambient_day() -> np.ndarray:
-    n = int(12 * SR)
-    tt = t(n)
-    rng = np.random.default_rng(21)
-    pad = 0.07 * sine(tt, 110.0) + 0.05 * sine(tt, 164.8, 0.4)
-    pad += 0.04 * sine(tt, 220.0, 1.1)
-    pad *= 0.65 + 0.35 * sine(tt, 0.07)
-    wind = 0.045 * lowpass(rng.uniform(-1, 1, n), 0.03)
-    traffic = 0.03 * lowpass(rng.uniform(-1, 1, n), 0.015) * (0.6 + 0.4 * sine(tt, 0.11))
+    n = int(SR * 8.0)
+    wind = lp(noise_seed(n, 201), 380) * 0.18
+    leaves = bp(noise_seed(n, 202), 1800, 5200) * 0.04
+    t = np.arange(n) / SR
     birds = np.zeros(n)
-    for k in range(14):
-        start = int(rng.uniform(0.3, 11.2) * SR)
-        length = int(rng.uniform(0.08, 0.18) * SR)
-        freq = rng.uniform(1800, 3200)
-        frag = sine(t(length), freq) * adsr(length, 0.01, 0.03, 0.3, 0.08) * 0.035
-        end = min(n, start + length)
-        birds[start:end] += frag[: end - start]
-    sig = fade_edges(pad + wind + traffic + birds, 180)
-    left = sig
-    right = np.roll(sig, 220) * 0.96
-    return np.stack([left, right], axis=1)
+    rng = np.random.default_rng(203)
+    for k in range(9):
+        start = int(rng.uniform(0.4, 7.2) * SR)
+        dur = int(rng.uniform(0.08, 0.18) * SR)
+        if start + dur >= n:
+            continue
+        f = rng.uniform(2100, 3400)
+        chirp = sine(dur, f) * np.hanning(dur) * rng.uniform(0.03, 0.07)
+        birds[start : start + dur] += chirp
+    wash = lp(sine(n, 78) * 0.02 + sine(n, 110) * 0.015, 200)
+    bed = mix(wind, leaves, birds, wash) * fade(n, 600, 700)
+    return limiter(bed, 0.45)
 
 
 def ambient_night() -> np.ndarray:
-    n = int(12 * SR)
-    tt = t(n)
-    rng = np.random.default_rng(44)
-    pad = 0.06 * sine(tt, 82.4) + 0.045 * sine(tt, 123.47, 0.7)
-    pad += 0.03 * sine(tt, 196.0, 1.4)
-    pad *= 0.7 + 0.3 * sine(tt, 0.05)
-    air = 0.03 * lowpass(rng.uniform(-1, 1, n), 0.02)
+    n = int(SR * 8.0)
+    drone = lp(sine(n, 46) * 0.06 + sine(n, 69) * 0.04 + noise_seed(n, 301) * 0.08, 140)
+    t = np.arange(n) / SR
     crickets = np.zeros(n)
-    for k in range(80):
-        start = int(rng.uniform(0.2, 11.6) * SR)
-        length = int(0.035 * SR)
-        freq = rng.uniform(4200, 6200)
-        frag = sine(t(length), freq) * adsr(length, 0.002, 0.008, 0.2, 0.02) * 0.028
-        end = min(n, start + length)
-        crickets[start:end] += frag[: end - start]
-    sig = fade_edges(pad + air + crickets, 180)
-    return np.stack([sig, np.roll(sig, 340) * 0.94], axis=1)
+    rng = np.random.default_rng(302)
+    for k in range(40):
+        start = int(rng.uniform(0.1, 7.6) * SR)
+        dur = int(0.035 * SR)
+        if start + dur >= n:
+            continue
+        chirp = sine(dur, rng.uniform(4200, 6100)) * np.hanning(dur) * 0.035
+        crickets[start : start + dur] += chirp
+    breeze = bp(noise_seed(n, 303), 400, 1600) * 0.05
+    bed = mix(drone, crickets, breeze) * fade(n, 700, 800)
+    return limiter(bed, 0.4)
 
 
 def main() -> None:
-    generators = {
-        "ui_click": ui_click,
-        "ui_hover": ui_hover,
-        "place": place,
-        "demolish": demolish,
-        "error": error,
-        "coin": coin,
-        "unlock": unlock,
-        "whoosh": whoosh,
-        "construction": construction,
-        "fire": fire,
-        "ambient_day": ambient_day,
-        "ambient_night": ambient_night,
-    }
-    for name, fn in generators.items():
-        wav = OUT / f"{name}.wav"
-        samples = fn()
-        stereo = samples.ndim == 2
-        write_wav(wav, samples, stereo=stereo)
-        to_ogg(wav)
-        ogg = OUT / f"{name}.ogg"
-        print(f"{name}: {ogg.stat().st_size / 1024:.1f} KB")
+    encode("ui_click", sfx_ui_click())
+    encode("ui_hover", sfx_ui_hover())
+    encode("place", sfx_place())
+    encode("construction", sfx_construction())
+    encode("demolish", sfx_demolish())
+    encode("error", sfx_error())
+    encode("coin", sfx_coin())
+    encode("unlock", sfx_unlock())
+    encode("whoosh", sfx_whoosh())
+    encode("fire", sfx_fire())
+    encode("ambient_day", ambient_day())
+    encode("ambient_night", ambient_night())
 
 
 if __name__ == "__main__":
