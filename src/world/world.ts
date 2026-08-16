@@ -9,6 +9,7 @@ import { CATALOG_BY_ID, isWaterTile, type BuildingDef } from "../game/catalog";
 import type { City } from "../game/city";
 import { mulberry } from "./textures";
 import { createBuilding, setBuildingNight } from "./buildings";
+import { rightHandOffset } from "./lanes";
 
 export const TILE = 2;
 
@@ -45,6 +46,7 @@ export class World {
   readonly hemi: THREE.HemisphereLight;
   readonly moon: THREE.DirectionalLight;
   readonly water: THREE.Mesh;
+  readonly waterBed: THREE.Mesh;
   readonly ghost: THREE.Group;
   readonly hover: THREE.Mesh;
   readonly buildings = new Map<string, THREE.Group>();
@@ -162,38 +164,62 @@ export class World {
     gridMat.opacity = 0.22;
     this.scene.add(grid);
 
+    this.waterBed = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial({
+        color: 0x072830,
+        roughness: 1,
+        metalness: 0,
+        emissive: 0x021018,
+        emissiveIntensity: 0.2,
+      }),
+    );
+    this.waterBed.receiveShadow = true;
+    this.scene.add(this.waterBed);
+
     const waterMat = new THREE.ShaderMaterial({
       transparent: false,
       uniforms: {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x0a6f8c) },
-        shallow: { value: new THREE.Color(0x5ee0ea) },
+        deep: { value: new THREE.Color(0x046b8a) },
+        shallow: { value: new THREE.Color(0x7ef0f6) },
+        foam: { value: new THREE.Color(0xe8fbff) },
       },
       vertexShader: `
         uniform float time;
         varying vec2 vUv;
+        varying vec3 vWorld;
         void main() {
           vUv = uv;
           vec3 p = position;
-          p.z += sin(p.x * 1.8 + time * 1.4) * 0.04 + cos(p.y * 1.6 + time) * 0.03;
+          p.y += sin(p.x * 2.1 + time * 1.5) * 0.045 + cos(p.z * 1.8 + time * 1.2) * 0.035;
+          vWorld = p;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
       fragmentShader: `
         uniform vec3 deep;
         uniform vec3 shallow;
+        uniform vec3 foam;
         uniform float time;
         varying vec2 vUv;
+        varying vec3 vWorld;
         void main() {
-          float n = sin(vUv.x * 40.0 + time) * 0.5 + cos(vUv.y * 36.0 - time * 0.8) * 0.5;
-          vec3 col = mix(deep, shallow, 0.55 + n * 0.2);
+          float n = sin(vWorld.x * 3.4 + time * 1.8) * 0.5 + cos(vWorld.z * 3.1 - time * 1.4) * 0.5;
+          float tile = 2.0;
+          float lx = abs(fract(vWorld.x / tile + 0.5) - 0.5) * 2.0;
+          float lz = abs(fract(vWorld.z / tile + 0.5) - 0.5) * 2.0;
+          float rim = smoothstep(0.72, 0.98, max(lx, lz));
+          vec3 col = mix(deep, shallow, 0.38 + n * 0.28);
+          col = mix(col, foam, rim * 0.7);
+          float spark = pow(max(0.0, sin(vWorld.x * 7.5 + vWorld.z * 5.5 + time * 3.2)), 14.0);
+          col += spark * 0.4;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
-    this.water = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 24, 24), waterMat);
-    this.water.rotation.x = -Math.PI / 2;
-    this.water.position.y = 0.04;
+    this.water = new THREE.Mesh(new THREE.BufferGeometry(), waterMat);
+    this.water.renderOrder = 1;
     this.scene.add(this.water);
 
     this.scene.add(this.roadGroup);
@@ -282,24 +308,28 @@ export class World {
 
   private rebuildTerrain(city: City): void {
     const waterGeom = new THREE.BufferGeometry();
+    const bedGeom = new THREE.BufferGeometry();
     const positions: number[] = [];
     const uvs: number[] = [];
+    const bedPos: number[] = [];
+    const bedUv: number[] = [];
+    const pushQuad = (arr: number[], uv: number[], x: number, y: number, z: number, s: number) => {
+      arr.push(
+        x - s, y, z - s,
+        x + s, y, z - s,
+        x + s, y, z + s,
+        x - s, y, z - s,
+        x + s, y, z + s,
+        x - s, y, z + s,
+      );
+      uv.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+    };
     for (let y = 0; y < city.size; y++) {
       for (let x = 0; x < city.size; x++) {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
-        const s = TILE * 0.52;
-        const y0 = 0.12;
-        const quad = [
-          [p.x - s, y0, p.z - s],
-          [p.x + s, y0, p.z - s],
-          [p.x + s, y0, p.z + s],
-          [p.x - s, y0, p.z - s],
-          [p.x + s, y0, p.z + s],
-          [p.x - s, y0, p.z + s],
-        ];
-        for (const v of quad) positions.push(v[0], v[1], v[2]);
-        uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+        pushQuad(bedPos, bedUv, p.x, 0.03, p.z, TILE * 0.54);
+        pushQuad(positions, uvs, p.x, 0.16, p.z, TILE * 0.51);
       }
     }
     waterGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -309,6 +339,12 @@ export class World {
     this.water.geometry = waterGeom;
     this.water.rotation.set(0, 0, 0);
     this.water.position.set(0, 0, 0);
+
+    bedGeom.setAttribute("position", new THREE.Float32BufferAttribute(bedPos, 3));
+    bedGeom.setAttribute("uv", new THREE.Float32BufferAttribute(bedUv, 2));
+    bedGeom.computeVertexNormals();
+    this.waterBed.geometry.dispose();
+    this.waterBed.geometry = bedGeom;
   }
 
   private scatterWilds(city: City): void {
@@ -464,7 +500,7 @@ export class World {
     if (nodes.length < 2) return;
     const count = Math.min(28, Math.floor(nodes.length / 3));
     for (let i = 0; i < count; i++) {
-      const path = this.randomPath(city, nodes);
+      const path = this.offsetPath(this.randomPath(city, nodes), 0.32);
       if (path.length < 2) continue;
       const mesh = this.makeCar(i);
       this.scene.add(mesh);
@@ -472,7 +508,7 @@ export class World {
     }
     const walkers = Math.min(16, Math.floor(nodes.length / 4));
     for (let i = 0; i < walkers; i++) {
-      const path = this.randomPath(city, nodes);
+      const path = this.offsetPath(this.randomPath(city, nodes), 0.58);
       if (path.length < 2) continue;
       const mesh = this.makePerson(i);
       this.scene.add(mesh);
@@ -500,20 +536,48 @@ export class World {
     return pts;
   }
 
+  /** Shift a polyline to the right of travel so vehicles keep a lane. */
+  private offsetPath(pts: THREE.Vector3[], lane: number): THREE.Vector3[] {
+    if (lane === 0 || pts.length < 2) return pts;
+    const out = pts.map((p) => p.clone());
+    for (let i = 0; i < pts.length; i++) {
+      const prev = pts[Math.max(0, i - 1)];
+      const next = pts[Math.min(pts.length - 1, i + 1)];
+      const dir = new THREE.Vector3(next.x - prev.x, 0, next.z - prev.z);
+      if (dir.lengthSq() < 1e-8) continue;
+      const o = rightHandOffset(dir.x, dir.z, lane);
+      out[i].x += o.x;
+      out[i].z += o.z;
+    }
+    return out;
+  }
+
   private makeCar(seed: number): THREE.Group {
     const g = new THREE.Group();
     const colors = [0xc45c4a, 0x2c3d5a, 0xc9a227, 0xe8e4dc, 0x3d7a4a];
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.38, 0.12, 0.2),
+      new THREE.BoxGeometry(0.22, 0.12, 0.42),
       new THREE.MeshStandardMaterial({ color: colors[seed % colors.length], metalness: 0.4, roughness: 0.35 }),
     );
     body.position.y = 0.08;
     body.castShadow = true;
     const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(0.2, 0.1, 0.18),
+      new THREE.BoxGeometry(0.18, 0.1, 0.2),
       new THREE.MeshStandardMaterial({ color: 0x89c2d4, metalness: 0.3, roughness: 0.15 }),
     );
-    cabin.position.set(-0.02, 0.16, 0);
+    cabin.position.set(0, 0.16, -0.06);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+    const wheelGeo = new THREE.BoxGeometry(0.06, 0.06, 0.09);
+    for (const [x, z] of [
+      [-0.12, 0.12],
+      [0.12, 0.12],
+      [-0.12, -0.12],
+      [0.12, -0.12],
+    ] as const) {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.position.set(x, 0.03, z);
+      g.add(wheel);
+    }
     g.add(body, cabin);
     return g;
   }
@@ -576,26 +640,27 @@ export class World {
   private makeBoat(seed: number): THREE.Group {
     const g = new THREE.Group();
     const hull = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 0.12, 0.28),
+      new THREE.BoxGeometry(0.28, 0.12, 0.7),
       new THREE.MeshStandardMaterial({ color: seed % 2 ? 0xcfc4b0 : 0x8a5a32, roughness: 0.55 }),
     );
     hull.position.y = 0.06;
     hull.castShadow = true;
     const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.14, 0.2),
+      new THREE.BoxGeometry(0.2, 0.14, 0.22),
       new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.6 }),
     );
-    cabin.position.set(-0.08, 0.16, 0);
+    cabin.position.set(0, 0.16, -0.1);
     const mast = new THREE.Mesh(
       new THREE.CylinderGeometry(0.02, 0.025, 0.55, 6),
       new THREE.MeshStandardMaterial({ color: 0x3a2a1c }),
     );
-    mast.position.set(0.1, 0.38, 0);
+    mast.position.set(0, 0.38, 0.08);
     const sail = new THREE.Mesh(
       new THREE.PlaneGeometry(0.22, 0.32),
       new THREE.MeshStandardMaterial({ color: 0xe8e2d4, side: THREE.DoubleSide, roughness: 0.9 }),
     );
-    sail.position.set(0.18, 0.42, 0);
+    sail.rotation.y = Math.PI / 2;
+    sail.position.set(0.02, 0.42, 0.12);
     g.add(hull, cabin, mast, sail);
     return g;
   }
@@ -717,7 +782,11 @@ export class World {
     const a = car.path[car.i];
     const b = car.path[car.i + 1];
     car.mesh.position.lerpVectors(a, b, car.t);
-    car.mesh.lookAt(b);
+    const lookX = b.x;
+    const lookZ = b.z;
+    if (Math.abs(lookX - a.x) + Math.abs(lookZ - a.z) > 1e-4) {
+      car.mesh.lookAt(lookX, car.mesh.position.y, lookZ);
+    }
   }
 
   render(): void {
@@ -741,7 +810,7 @@ export class World {
     ctx.fillStyle = "#1c2418";
     ctx.fillRect(0, 0, s, s);
     for (const t of city.tiles) {
-      if (t.water && !t.road) ctx.fillStyle = "#2aa0b8";
+      if (t.water && !t.road) ctx.fillStyle = "#1ec6d8";
       else if (t.road) ctx.fillStyle = t.water ? "#c9a227" : "#5a5e66";
       else if (t.onFire) ctx.fillStyle = "#ff6a2a";
       else if (!t.buildingId) continue;
