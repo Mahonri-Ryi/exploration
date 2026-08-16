@@ -7,7 +7,7 @@ import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CATALOG_BY_ID, isWaterTile, type BuildingDef, type InfoLayer } from "../game/catalog";
 import type { City } from "../game/city";
-import { makeTerrainTexture, mulberry } from "./textures";
+import { FACADE_SIZE, makeTerrainMaps, mulberry } from "./textures";
 import { createBuilding, setBuildingNight } from "./buildings";
 
 export const TILE = 2;
@@ -83,7 +83,7 @@ export class World {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene.fog = new THREE.Fog(0xb7c9d6, 55, 160);
@@ -114,10 +114,11 @@ export class World {
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       uniforms: {
-        top: { value: new THREE.Color(0x7fb3d4) },
-        mid: { value: new THREE.Color(0xd7c4a4) },
+        top: { value: new THREE.Color(0x6eafd8) },
+        mid: { value: new THREE.Color(0xe2c9a4) },
         bot: { value: new THREE.Color(0x1a2230) },
         night: { value: 0 },
+        sunDir: { value: new THREE.Vector3(0.4, 0.7, 0.3).normalize() },
       },
       vertexShader: `
         varying vec3 vPos;
@@ -131,11 +132,19 @@ export class World {
         uniform vec3 mid;
         uniform vec3 bot;
         uniform float night;
+        uniform vec3 sunDir;
         varying vec3 vPos;
         void main() {
-          float h = normalize(vPos).y * 0.5 + 0.5;
-          vec3 day = mix(mid, top, smoothstep(0.35, 0.95, h));
-          vec3 nd = mix(bot, vec3(0.05, 0.07, 0.14), smoothstep(0.2, 0.9, h));
+          vec3 dir = normalize(vPos);
+          float h = dir.y * 0.5 + 0.5;
+          vec3 day = mix(mid, top, smoothstep(0.32, 0.96, h));
+          float sun = pow(max(0.0, dot(dir, normalize(sunDir))), 64.0);
+          float halo = pow(max(0.0, dot(dir, normalize(sunDir))), 8.0);
+          day += vec3(1.0, 0.9, 0.7) * sun * 1.15;
+          day += vec3(1.0, 0.72, 0.42) * halo * 0.22;
+          vec3 nd = mix(bot, vec3(0.04, 0.06, 0.13), smoothstep(0.2, 0.9, h));
+          float star = step(0.997, fract(sin(dot(dir.xy, vec2(12.9898, 78.233))) * 43758.5453));
+          nd += vec3(0.85, 0.9, 1.0) * star * 0.65;
           gl_FragColor = vec4(mix(day, nd, night), 1.0);
         }
       `,
@@ -172,21 +181,27 @@ export class World {
       transparent: true,
       uniforms: {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x064a68) },
+        deep: { value: new THREE.Color(0x053e5c) },
         shallow: { value: new THREE.Color(0x4ec8d4) },
-        foam: { value: new THREE.Color(0xd8f4f8) },
+        foam: { value: new THREE.Color(0xe8f8fc) },
+        sunDir: { value: new THREE.Vector3(0.35, 0.8, 0.25).normalize() },
       },
       vertexShader: `
         uniform float time;
         varying vec2 vUv;
         varying float vWave;
+        varying vec3 vWorld;
         void main() {
           vUv = uv;
           vec3 p = position;
-          float w = sin(p.x * 1.6 + time * 1.3) * 0.05 + cos(p.z * 1.4 + time * 0.9) * 0.04;
+          float w = sin(p.x * 1.55 + time * 1.25) * 0.045
+            + cos(p.z * 1.35 + time * 0.88) * 0.035
+            + sin((p.x + p.z) * 3.1 + time * 1.7) * 0.016;
           p.y += w;
           vWave = w;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          vec4 world = modelMatrix * vec4(p, 1.0);
+          vWorld = world.xyz;
+          gl_Position = projectionMatrix * viewMatrix * world;
         }
       `,
       fragmentShader: `
@@ -194,14 +209,26 @@ export class World {
         uniform vec3 shallow;
         uniform vec3 foam;
         uniform float time;
+        uniform vec3 sunDir;
         varying vec2 vUv;
         varying float vWave;
+        varying vec3 vWorld;
         void main() {
-          float n = sin(vUv.x * 28.0 + time) * 0.5 + cos(vUv.y * 22.0 - time * 0.8) * 0.5;
-          float edge = smoothstep(0.08, 0.0, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-          vec3 col = mix(deep, shallow, 0.45 + n * 0.22 + vWave * 2.0);
-          col = mix(col, foam, edge * 0.65);
-          gl_FragColor = vec4(col, 0.92);
+          float n = sin(vUv.x * 30.0 + time) * 0.5 + cos(vUv.y * 24.0 - time * 0.85) * 0.5;
+          float caustic = sin((vUv.x + vUv.y) * 42.0 + time * 1.6) * cos(vUv.x * 18.0 - time);
+          float edge = smoothstep(0.1, 0.0, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
+          vec3 nrm = normalize(vec3(
+            sin(vWorld.x * 2.2 + time) * 0.18,
+            1.0,
+            cos(vWorld.z * 2.0 + time * 0.9) * 0.18
+          ));
+          float spec = pow(max(0.0, dot(nrm, normalize(sunDir))), 52.0);
+          float fres = pow(1.0 - max(0.0, nrm.y), 2.4);
+          vec3 col = mix(deep, shallow, 0.42 + n * 0.2 + vWave * 2.2 + caustic * 0.08);
+          col = mix(col, foam, edge * 0.72);
+          col += vec3(0.86, 0.95, 1.0) * spec * 0.65;
+          col = mix(col, vec3(0.72, 0.88, 0.94), fres * 0.32);
+          gl_FragColor = vec4(col, 0.9);
         }
       `,
     });
@@ -287,18 +314,26 @@ export class World {
     asphalt.wrapS = asphalt.wrapT = THREE.RepeatWrapping;
     grass.repeat.set(10, 10);
     asphalt.repeat.set(1, 1);
-    const aniso = preferLiteGpu() ? 1 : 8;
+    const aniso = preferLiteGpu() ? 4 : 16;
     grass.anisotropy = aniso;
     asphalt.anisotropy = aniso;
+    grass.generateMipmaps = true;
+    grass.minFilter = THREE.LinearMipmapLinearFilter;
     this.asphaltTex = asphalt;
-    const generated = makeTerrainTexture();
-    generated.anisotropy = aniso;
+    const generated = makeTerrainMaps();
+    generated.map.anisotropy = aniso;
+    generated.roughnessMap.anisotropy = aniso;
+    generated.normalMap.anisotropy = aniso;
     const gmat = this.ground.material as THREE.MeshStandardMaterial;
-    gmat.map = generated;
-    gmat.color.set(0xc8d4b0);
-    gmat.roughness = 0.95;
+    gmat.map = grass;
+    gmat.roughnessMap = generated.roughnessMap;
+    gmat.normalMap = generated.normalMap;
+    gmat.normalScale.set(0.45, 0.45);
+    gmat.color.set(0xd2dec0);
+    gmat.roughness = 0.92;
+    gmat.envMapIntensity = 0.35;
     gmat.needsUpdate = true;
-    void grass;
+    void generated.map;
   }
 
   resize(): void {
@@ -407,11 +442,11 @@ export class World {
   private scatterWilds(city: City): void {
     this.wilds.clear();
     const rng = mulberry(91);
-    const foliage = new THREE.MeshStandardMaterial({ color: 0x2c5c34, roughness: 0.92 });
+    const foliage = new THREE.MeshStandardMaterial({ color: 0x2c5c34, roughness: 0.94, envMapIntensity: 0.35 });
     const bark = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.9 });
     const dummy = new THREE.Object3D();
     const spots: THREE.Vector3[] = [];
-    for (let i = 0; i < 220; i++) {
+    for (let i = 0; i < 240; i++) {
       const x = Math.floor(rng() * city.size);
       const y = Math.floor(rng() * city.size);
       const tile = city.get(x, y);
@@ -425,19 +460,25 @@ export class World {
       p.y = this.heightAt(x, y, city.size);
       spots.push(p);
     }
-    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 0.45, 5), bark, spots.length);
-    const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(0.38, 0.85, 7), foliage, spots.length);
-    trunk.castShadow = leaves.castShadow = true;
+    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.07, 0.42, 6), bark, spots.length);
+    const low = new THREE.InstancedMesh(new THREE.ConeGeometry(0.36, 0.55, 8), foliage, spots.length);
+    const high = new THREE.InstancedMesh(new THREE.ConeGeometry(0.22, 0.4, 8), foliage, spots.length);
+    trunk.castShadow = low.castShadow = high.castShadow = true;
     spots.forEach((p, i) => {
-      dummy.position.set(p.x, p.y + 0.22, p.z);
-      dummy.scale.setScalar(0.9 + rng() * 0.7);
+      const s = 0.88 + rng() * 0.7;
+      dummy.position.set(p.x, p.y + 0.2, p.z);
+      dummy.scale.setScalar(s);
       dummy.updateMatrix();
       trunk.setMatrixAt(i, dummy.matrix);
-      dummy.position.y = p.y + 0.78;
+      dummy.position.y = p.y + 0.52 * s;
       dummy.updateMatrix();
-      leaves.setMatrixAt(i, dummy.matrix);
+      low.setMatrixAt(i, dummy.matrix);
+      dummy.position.y = p.y + 0.82 * s;
+      dummy.scale.setScalar(s * 0.92);
+      dummy.updateMatrix();
+      high.setMatrixAt(i, dummy.matrix);
     });
-    this.wilds.add(trunk, leaves);
+    this.wilds.add(trunk, low, high);
   }
 
   rebuildAll(city: City): void {
@@ -629,16 +670,35 @@ export class World {
     const g = new THREE.Group();
     const colors = [0xc45c4a, 0x2c3d5a, 0xc9a227, 0xe8e4dc, 0x3d7a4a];
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.38, 0.12, 0.2),
-      new THREE.MeshStandardMaterial({ color: colors[seed % colors.length], metalness: 0.4, roughness: 0.35 }),
+      new THREE.BoxGeometry(0.4, 0.12, 0.2),
+      new THREE.MeshStandardMaterial({
+        color: colors[seed % colors.length],
+        metalness: 0.55,
+        roughness: 0.28,
+        envMapIntensity: 1.1,
+      }),
     );
-    body.position.y = 0.08;
+    body.position.y = 0.1;
     body.castShadow = true;
     const cabin = new THREE.Mesh(
       new THREE.BoxGeometry(0.2, 0.1, 0.18),
-      new THREE.MeshStandardMaterial({ color: 0x89c2d4, metalness: 0.3, roughness: 0.15 }),
+      new THREE.MeshStandardMaterial({ color: 0x89c2d4, metalness: 0.45, roughness: 0.08, envMapIntensity: 1.3 }),
     );
-    cabin.position.set(-0.02, 0.16, 0);
+    cabin.position.set(-0.02, 0.18, 0);
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.7 });
+    const wheelGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.04, 8);
+    const wheels = [
+      [-0.12, 0.045, 0.11],
+      [0.12, 0.045, 0.11],
+      [-0.12, 0.045, -0.11],
+      [0.12, 0.045, -0.11],
+    ];
+    for (const [x, y, z] of wheels) {
+      const wheel = new THREE.Mesh(wheelGeo, rubber);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, y, z);
+      g.add(wheel);
+    }
     g.add(body, cabin);
     return g;
   }
@@ -859,7 +919,12 @@ export class World {
     const night = THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
     const skyMat = this.sky.material as THREE.ShaderMaterial;
     skyMat.uniforms.night.value = night;
-    this.sun.position.set(Math.cos(sunAngle) * 60, Math.max(4, elev * 50 + 8), Math.sin(sunAngle) * 40);
+    const sunPos = new THREE.Vector3(Math.cos(sunAngle) * 60, Math.max(4, elev * 50 + 8), Math.sin(sunAngle) * 40);
+    const sunDir = sunPos.clone().normalize();
+    if (skyMat.uniforms.sunDir) skyMat.uniforms.sunDir.value.copy(sunDir);
+    const waterMat = this.water.material as THREE.ShaderMaterial;
+    if (waterMat.uniforms?.sunDir) waterMat.uniforms.sunDir.value.copy(sunDir);
+    this.sun.position.copy(sunPos);
     this.sun.target.position.set(0, 0, 0);
     this.sun.intensity = 0.35 + (1 - night) * 2.35;
     this.sun.color.set(night > 0.55 ? 0xff9a62 : elev > 0.15 ? 0xffe4b8 : 0xffc08a);
@@ -921,6 +986,39 @@ export class World {
 
   render(): void {
     this.composer.render();
+  }
+
+  qualityReport(): {
+    toneMapping: string;
+    terrainMap: boolean;
+    terrainAnisotropy: number;
+    terrainNormal: boolean;
+    waterShader: boolean;
+    facadeSize: number;
+    bloom: number;
+    pixelRatio: number;
+  } {
+    const gmat = this.ground.material as THREE.MeshStandardMaterial;
+    let facadeW = 0;
+    for (const b of this.buildings.values()) {
+      b.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
+        const img = mat?.map?.image as { width?: number } | undefined;
+        const w = img?.width;
+        if (w) facadeW = Math.max(facadeW, w);
+      });
+    }
+    return {
+      toneMapping: this.renderer.toneMapping === THREE.ACESFilmicToneMapping ? "ACESFilmic" : "other",
+      terrainMap: Boolean(gmat.map),
+      terrainAnisotropy: gmat.map?.anisotropy ?? 0,
+      terrainNormal: Boolean(gmat.normalMap),
+      waterShader: (this.water.material as THREE.ShaderMaterial).isShaderMaterial === true,
+      facadeSize: facadeW || FACADE_SIZE,
+      bloom: this.bloom.strength,
+      pixelRatio: this.renderer.getPixelRatio(),
+    };
   }
 
   nightAmount(city: City): number {

@@ -489,6 +489,13 @@ declare global {
         category: string;
         layer: string;
       };
+      audio: {
+        unlock: () => Promise<void>;
+        play: (name: import("./audio/engine").SfxName) => void;
+        setMuted: (muted: boolean) => void;
+        report: () => ReturnType<AudioEngine["report"]>;
+      };
+      graphics: () => ReturnType<World["qualityReport"]>;
     };
   }
 }
@@ -612,4 +619,14 @@ window.__AETHERIS__ = {
     cam.spherical.radius = 28;
   },
   hud: () => readHud(),
+  audio: {
+    unlock: () => audio.unlock(),
+    play: (name) => audio.play(name),
+    setMuted: (muted) => {
+      audio.setMuted(muted);
+      hud.setMuted(audio.muted);
+    },
+    report: () => audio.report(),
+  },
+  graphics: () => world.qualityReport(),
 };
