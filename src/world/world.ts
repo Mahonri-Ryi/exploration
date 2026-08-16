@@ -181,8 +181,8 @@ export class World {
       transparent: false,
       uniforms: {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x046b8a) },
-        shallow: { value: new THREE.Color(0x7ef0f6) },
+        deep: { value: new THREE.Color(0x057a9c) },
+        shallow: { value: new THREE.Color(0xa8fbff) },
         foam: { value: new THREE.Color(0xe8fbff) },
       },
       vertexShader: `
@@ -210,16 +210,18 @@ export class World {
           float lx = abs(fract(vWorld.x / tile + 0.5) - 0.5) * 2.0;
           float lz = abs(fract(vWorld.z / tile + 0.5) - 0.5) * 2.0;
           float rim = smoothstep(0.72, 0.98, max(lx, lz));
-          vec3 col = mix(deep, shallow, 0.38 + n * 0.28);
-          col = mix(col, foam, rim * 0.7);
+          vec3 col = mix(deep, shallow, 0.45 + n * 0.3);
+          col = mix(col, foam, rim * 0.85);
           float spark = pow(max(0.0, sin(vWorld.x * 7.5 + vWorld.z * 5.5 + time * 3.2)), 14.0);
-          col += spark * 0.4;
+          col += spark * 0.55;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
     this.water = new THREE.Mesh(new THREE.BufferGeometry(), waterMat);
     this.water.renderOrder = 1;
+    waterMat.toneMapped = false;
+    waterMat.side = THREE.DoubleSide;
     this.scene.add(this.water);
 
     this.scene.add(this.roadGroup);
@@ -328,8 +330,8 @@ export class World {
       for (let x = 0; x < city.size; x++) {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
-        pushQuad(bedPos, bedUv, p.x, 0.03, p.z, TILE * 0.54);
-        pushQuad(positions, uvs, p.x, 0.16, p.z, TILE * 0.51);
+        pushQuad(bedPos, bedUv, p.x, 0.02, p.z, TILE * 0.55);
+        pushQuad(positions, uvs, p.x, 0.18, p.z, TILE * 0.515);
       }
     }
     waterGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -500,7 +502,7 @@ export class World {
     if (nodes.length < 2) return;
     const count = Math.min(28, Math.floor(nodes.length / 3));
     for (let i = 0; i < count; i++) {
-      const path = this.offsetPath(this.randomPath(city, nodes), 0.32);
+      const path = this.offsetPath(this.randomPath(city, nodes), 0.36);
       if (path.length < 2) continue;
       const mesh = this.makeCar(i);
       this.scene.add(mesh);
@@ -782,10 +784,10 @@ export class World {
     const a = car.path[car.i];
     const b = car.path[car.i + 1];
     car.mesh.position.lerpVectors(a, b, car.t);
-    const lookX = b.x;
-    const lookZ = b.z;
-    if (Math.abs(lookX - a.x) + Math.abs(lookZ - a.z) > 1e-4) {
-      car.mesh.lookAt(lookX, car.mesh.position.y, lookZ);
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    if (dx * dx + dz * dz > 1e-8) {
+      car.mesh.lookAt(car.mesh.position.x + dx, car.mesh.position.y, car.mesh.position.z + dz);
     }
   }
 
