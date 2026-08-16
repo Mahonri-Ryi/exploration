@@ -1,0 +1,32 @@
+---
+description: Notify #city-builder on Slack after every completed Aetheris update
+alwaysApply: true
+---
+
+# Slack notify on finished updates
+
+After you **finish adding updates** to this project (gameplay, assets, docs, hosting, rules, or other repo changes), **post to Slack `#city-builder` before you end the turn**. Do this every time. Do not wait for the user to ask.
+
+## Channel
+
+- Name: `#city-builder`
+- Channel ID: `C0BQC5201PV`
+- Tool: Slack MCP `slack_send_message` (send the message; do not leave it as a draft)
+
+## When to post
+
+Post when the turn produced a real update: commits, new features, README/docs, assets, tests, or configuration.
+
+Do **not** post for question-only turns with no repo changes (for example “how does X work?” with no edits).
+
+## What to say
+
+Keep it short and useful as a notification:
+
+- One-line what shipped
+- How to try it (`npm run dev` → http://localhost:5173, or any live URL)
+- PR or commit if one exists (`https://github.com/Mahonri-Ryi/exploration/pull/2`)
+
+Set `unfurl_app_links` to true when the message includes the GitHub PR.
+
+Return the Slack message link in your user-facing summary.
