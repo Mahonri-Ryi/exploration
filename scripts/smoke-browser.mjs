@@ -63,7 +63,15 @@ async function clickTool(id) {
     const cat = tray?.getAttribute("data-tray");
     if (cat) document.querySelector(`.cat[data-cat="${cat}"]`)?.click();
   }, id);
-  await settle();
+  await page.waitForFunction(
+    (tool) => {
+      const btn = document.querySelector(`.tool[data-tool="${tool}"]`);
+      const tray = btn?.closest(".tray");
+      return Boolean(btn && tray && !tray.hidden);
+    },
+    { timeout: 8000 },
+    id,
+  );
   await clickSel(`.tool[data-tool="${id}"]`);
   const tool = await api(() => window.__AETHERIS__.tool());
   if (tool !== id) throw new Error(`tool is ${tool}, expected ${id}`);
