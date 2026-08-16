@@ -17,6 +17,7 @@ describe("primer", () => {
   it("starts on welcome and waits for Continue", () => {
     const city = new City(16, "Test");
     expect(tutorialStep(city)?.id).toBe("welcome");
+    expect(tutorialStep(city)?.body.toLowerCase()).toMatch(/phone|tap to build|look/);
     expect(city.continueTutorial()).toBe(true);
     expect(tutorialStep(city)?.id).toBe("avenue");
     expect(city.continueTutorial()).toBe(false);

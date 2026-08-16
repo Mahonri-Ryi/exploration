@@ -15,12 +15,12 @@ export const TUTORIAL: TutorialStep[] = [
   {
     id: "welcome",
     title: "The vale is yours",
-    body: "Right-drag to orbit, scroll to zoom, WASD to travel. The blue ribbon is the river — do not build on it yet.",
+    body: "On a phone: tap to build, two fingers to orbit and pinch to zoom, or tap Look to drag the view. On a computer: right-drag to orbit, scroll to zoom, WASD to travel. The blue ribbon is the river — do not build on it yet.",
   },
   {
     id: "avenue",
     title: "Lay an avenue",
-    body: "Select Avenue in the left toolbar (or press 2). Click and drag on the grass to paint a short road. Buildings need an avenue beside them to operate.",
+    body: "Select Avenue in the toolbar (or press 2). Tap or click and drag on the grass to paint a short road. Buildings need an avenue beside them to operate.",
     tool: "road",
     wait: (c) => c.tiles.some((t) => t.road && !t.water),
   },
@@ -54,7 +54,7 @@ export const TUTORIAL: TutorialStep[] = [
   {
     id: "survey",
     title: "Survey a plot",
-    body: "Select Survey (1 or I) and click the cottage. The inspect panel shows road, power, water, residents, and smoke. You will need this to upgrade.",
+    body: "Select Survey (1 or I) and tap the cottage. The inspect panel shows road, power, water, residents, and smoke. You will need this to upgrade.",
     tool: "inspect",
     wait: (c) => c.flags.surveyed,
   },
@@ -80,7 +80,7 @@ export const TUTORIAL: TutorialStep[] = [
   {
     id: "upgrade",
     title: "Raise the roof",
-    body: "Survey the cottage and press U, or the gold button, to upgrade it to a Villa. Cottages climb to towers; shops and workshops have their own chains.",
+    body: "Survey the cottage and tap Raise, or press U, to upgrade it to a Villa. Cottages climb to towers; shops and workshops have their own chains.",
     tool: "inspect",
     wait: (c) => c.flags.upgraded,
   },
@@ -93,7 +93,7 @@ export const TUTORIAL: TutorialStep[] = [
   {
     id: "charter",
     title: "Keep the charter",
-    body: "The Charter panel pays gold for first-hour goals. Complete them as you grow. Larger tools unlock from the toolbar as Souls rise.",
+    body: "The Charter panel pays gold for first-hour goals. On a phone, tap Charter to open it. Complete them as you grow. Larger tools unlock from the toolbar as Souls rise.",
   },
   {
     id: "fire",

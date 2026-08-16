@@ -44,7 +44,7 @@ Vite prints a local URL. Leave this terminal open while you play.
 4. Click **Found City** for a new map (a short primer starts).
 5. Click **Continue** if you already saved a city in this browser.
 
-That is the game. Use the left toolbar to build. Press `H` for field notes and `A` for laurels.
+That is the game. On a phone, tools sit along the bottom; tap to build, two fingers to orbit, and **Look** to drag the view. On a computer, use the left toolbar. Press `H` for field notes and `A` for laurels.
 
 ### Play from a production build (optional)
 
@@ -87,9 +87,9 @@ Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub
 
 - **Found City** starts a new map with a $75,000 treasury and a short **primer** that teaches roads, power, water, homes, jobs, parks, upgrades, the river, fires, and laurels. Skip it anytime.
 - **Continue** restores the last save from this browser.
-- Left click places the selected tool. Drag to paint roads or raze.
-- Right-drag or middle-drag orbits. Alt/Shift-drag pans. Scroll zooms.
-- `WASD` or arrows travel. `Q`/`E` yaw. `R` resets the camera.
+- **Phone / tablet:** tap to place, drag Avenue or Raze to paint, two fingers to orbit and pinch to zoom. **Look** (or `L`) lets one finger orbit without building. Tools, Look, Charter, and Notes sit along the bottom.
+- **Computer:** left click places the selected tool. Drag to paint roads or raze. Right-drag or middle-drag orbits. Alt/Shift-drag pans. Scroll zooms.
+- `WASD` or arrows travel. `Q`/`E` yaw. `R` resets the camera. `L` toggles look mode.
 - `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `H` field notes. `A` laurels. `Space` pauses.
 - Buildings need **road access**, **power**, and **water** to operate. **Windmills** make clean power without a water main.
 - Paint an avenue onto the river to raise a **bridge**. **Docks** must face the water. The unique **River Beacon** doubles dock dues.

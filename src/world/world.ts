@@ -12,6 +12,10 @@ import { createBuilding, setBuildingNight } from "./buildings";
 
 export const TILE = 2;
 
+function preferLiteGpu(): boolean {
+  return window.matchMedia("(max-width: 900px), (pointer: coarse)").matches;
+}
+
 export function tileToWorld(x: number, y: number, size: number): THREE.Vector3 {
   return new THREE.Vector3((x - size / 2 + 0.5) * TILE, 0, (y - size / 2 + 0.5) * TILE);
 }
@@ -67,7 +71,7 @@ export class World {
       alpha: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preferLiteGpu() ? 1.25 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -84,7 +88,7 @@ export class World {
 
     this.sun = new THREE.DirectionalLight(0xffe6c2, 2.6);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(preferLiteGpu() ? 1024 : 2048, preferLiteGpu() ? 1024 : 2048);
     this.sun.shadow.camera.near = 1;
     this.sun.shadow.camera.far = 160;
     this.sun.shadow.camera.left = -55;
@@ -218,11 +222,12 @@ export class World {
     this.hover.position.y = 0.07;
     this.scene.add(this.hover);
 
+    const lite = preferLiteGpu();
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), 0.28, 0.35, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), lite ? 0.14 : 0.28, 0.35, 0.82);
     this.composer.addPass(this.bloom);
-    this.composer.addPass(new SMAAPass());
+    if (!lite) this.composer.addPass(new SMAAPass());
     this.composer.addPass(new OutputPass());
 
     this.spawnBirds();
@@ -256,6 +261,7 @@ export class World {
     const h = window.innerHeight;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preferLiteGpu() ? 1.25 : 2));
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.bloom.setSize(w, h);
@@ -660,7 +666,7 @@ export class World {
     fog.far = night > 0.5 ? 130 : 170;
     this.scene.background = fog.color;
     this.renderer.toneMappingExposure = 0.82 + (1 - night) * 0.28;
-    this.bloom.strength = 0.18 + night * 0.32;
+    this.bloom.strength = preferLiteGpu() ? 0.08 + night * 0.16 : 0.18 + night * 0.32;
 
     for (const [, b] of this.buildings) {
       setBuildingNight(b, night);
