@@ -178,49 +178,23 @@ export class World {
     this.waterBed.receiveShadow = true;
     this.scene.add(this.waterBed);
 
-    const waterMat = new THREE.ShaderMaterial({
-      transparent: false,
-      uniforms: {
-        time: { value: 0 },
-        deep: { value: new THREE.Color(0x057a9c) },
-        shallow: { value: new THREE.Color(0xa8fbff) },
-      },
-      vertexShader: `
-        uniform float time;
-        varying vec2 vUv;
-        varying vec3 vWorld;
-        void main() {
-          vUv = uv;
-          vec3 p = position;
-          p.y += sin(p.x * 2.1 + time * 1.5) * 0.045 + cos(p.z * 1.8 + time * 1.2) * 0.035;
-          vWorld = p;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 deep;
-        uniform vec3 shallow;
-        uniform float time;
-        varying vec2 vUv;
-        varying vec3 vWorld;
-        void main() {
-          float n = sin(vWorld.x * 3.4 + time * 1.8) * 0.5 + cos(vWorld.z * 3.1 - time * 1.4) * 0.5;
-          vec3 col = mix(deep, shallow, 0.42 + n * 0.32);
-          float spark = pow(max(0.0, sin(vWorld.x * 7.5 + vWorld.z * 5.5 + time * 3.2)), 14.0);
-          col += spark * 0.45;
-          gl_FragColor = vec4(col, 1.0);
-        }
-      `,
-    });
-    this.water = new THREE.Mesh(new THREE.BufferGeometry(), waterMat);
+    this.water = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial({
+        color: 0x1aa4c8,
+        emissive: 0x0e7a9a,
+        emissiveIntensity: 0.55,
+        roughness: 0.22,
+        metalness: 0.18,
+        side: THREE.DoubleSide,
+      }),
+    );
     this.water.renderOrder = 1;
-    waterMat.toneMapped = false;
-    waterMat.side = THREE.DoubleSide;
     this.scene.add(this.water);
 
     this.waterFoam = new THREE.Mesh(
       new THREE.BufferGeometry(),
-      new THREE.MeshBasicMaterial({ color: 0xd9f7fb, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: 0xe5f8fc, toneMapped: false }),
     );
     this.waterFoam.renderOrder = 2;
     this.scene.add(this.waterFoam);
@@ -343,9 +317,9 @@ export class World {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
         pushQuad(bedPos, bedUv, p.x, 0.02, p.z, TILE * 0.55);
-        pushQuad(positions, uvs, p.x, 0.18, p.z, TILE * 0.515);
-        const s = TILE * 0.515;
-        const band = 0.16;
+        pushQuad(positions, uvs, p.x, 0.18, p.z, TILE * 0.64);
+        const s = TILE * 0.64;
+        const band = 0.1;
         const fy = 0.2;
         if (!isWaterTile(x, y - 1, city.size)) {
           pushStrip(p.x - s, fy, p.z - s, p.x + s, fy, p.z - s, p.x + s, fy, p.z - s + band, p.x - s, fy, p.z - s + band);
@@ -757,8 +731,10 @@ export class World {
 
   update(dt: number, city: City): void {
     this.waterTime += dt;
-    const mat = this.water.material as THREE.ShaderMaterial;
-    if (mat.uniforms?.time) mat.uniforms.time.value = this.waterTime;
+    const waterMat = this.water.material as THREE.MeshStandardMaterial;
+    if (waterMat.emissiveIntensity !== undefined) {
+      waterMat.emissiveIntensity = 0.48 + Math.sin(this.waterTime * 1.4) * 0.12;
+    }
 
     const phase = city.dayPhase();
     const sunAngle = phase * Math.PI * 2 - Math.PI / 2;
