@@ -1,6 +1,9 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { BuildingDef } from "../game/catalog";
 import { makeFacadeMaps, makeRoofTexture, makeWindowTexture, mulberry } from "./textures";
+
+export const ROUNDED_MASSING = true;
 
 const matCache = new Map<string, THREE.Material>();
 
@@ -13,7 +16,12 @@ function mat(key: string, factory: () => THREE.Material): THREE.Material {
 }
 
 function box(w: number, h: number, d: number, material: THREE.Material, y = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  const minD = Math.min(w, h, d);
+  const geo =
+    minD > 0.14
+      ? new RoundedBoxGeometry(w, h, d, 1, Math.min(0.05, minD * 0.14))
+      : new THREE.BoxGeometry(w, h, d);
+  const mesh = new THREE.Mesh(geo, material);
   mesh.position.y = y + h / 2;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -28,7 +36,7 @@ function cyl(
   y = 0,
   segs = 12,
 ): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, segs), material);
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, Math.max(segs, 16)), material);
   mesh.position.y = y + h / 2;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -405,10 +413,10 @@ function addTree(
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, h, 6), dark);
   trunk.position.set(x, h / 2, z);
   trunk.castShadow = true;
-  const low = new THREE.Mesh(new THREE.ConeGeometry(0.26 + rng() * 0.06, 0.42, 7), foliage);
+  const low = new THREE.Mesh(new THREE.ConeGeometry(0.26 + rng() * 0.06, 0.42, 8), foliage);
   low.position.set(x, h + 0.12, z);
   low.castShadow = true;
-  const high = new THREE.Mesh(new THREE.ConeGeometry(0.16 + rng() * 0.05, 0.32, 7), foliage);
+  const high = new THREE.Mesh(new THREE.ConeGeometry(0.16 + rng() * 0.05, 0.32, 8), foliage);
   high.position.set(x, h + 0.36, z);
   high.castShadow = true;
   g.add(trunk, low, high);
