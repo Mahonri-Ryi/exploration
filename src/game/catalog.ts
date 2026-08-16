@@ -603,10 +603,19 @@ export const TOOL_ORDER = [
 
 export type ToolId = (typeof TOOL_ORDER)[number];
 
+/** Shared with the ground shader and river mesh so the vale water stays aligned. */
+export const WATER_RIVER_NY = 0.44;
+export const WATER_RIVER_AMP = 0.11;
+export const WATER_RIVER_FREQ = 2.15;
+export const WATER_RIVER_HALF = 0.048;
+export const WATER_LAKE_NX = 0.78;
+export const WATER_LAKE_NY = 0.2;
+export const WATER_LAKE_R = 0.085;
+
 export function isWaterTile(x: number, y: number, size: number): boolean {
   const nx = x / Math.max(1, size - 1);
   const ny = y / Math.max(1, size - 1);
-  const river = Math.abs(ny - (0.44 + 0.11 * Math.sin(nx * Math.PI * 2.15))) < 0.048;
-  const lake = (x - size * 0.78) ** 2 + (y - size * 0.2) ** 2 < (size * 0.085) ** 2;
+  const river = Math.abs(ny - (WATER_RIVER_NY + WATER_RIVER_AMP * Math.sin(nx * Math.PI * WATER_RIVER_FREQ))) < WATER_RIVER_HALF;
+  const lake = (x - size * WATER_LAKE_NX) ** 2 + (y - size * WATER_LAKE_NY) ** 2 < (size * WATER_LAKE_R) ** 2;
   return river || lake;
 }

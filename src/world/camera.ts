@@ -250,4 +250,9 @@ export class OrbitCam {
     this.target.set(0, 0, 0);
     this.spherical.set(34, 1.02, Math.PI / 4);
   }
+
+  setView(targetX: number, targetZ: number, radius: number, phi: number, theta: number): void {
+    this.target.set(targetX, 0, targetZ);
+    this.spherical.set(radius, phi, theta);
+  }
 }

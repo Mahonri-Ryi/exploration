@@ -451,6 +451,8 @@ declare global {
       continueTutorial: () => boolean;
       tutorial: () => { done: boolean; index: number; id: string | null };
       achievements: () => string[];
+      traffic: () => ReturnType<World["debugTraffic"]>;
+      view: (targetX: number, targetZ: number, radius: number, phi: number, theta: number) => void;
     };
   }
 }
@@ -507,4 +509,8 @@ window.__AETHERIS__ = {
     id: tutorialStep(city)?.id ?? null,
   }),
   achievements: () => [...city.completedAchievements],
+  traffic: () => world.debugTraffic(),
+  view: (targetX, targetZ, radius, phi, theta) => {
+    cam.setView(targetX, targetZ, radius, phi, theta);
+  },
 };
