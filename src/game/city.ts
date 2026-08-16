@@ -12,6 +12,8 @@ export interface Tile {
   residents: number;
   workers: number;
   age: number;
+  onFire: boolean;
+  fireAge: number;
 }
 
 export interface CityStats {
@@ -35,6 +37,9 @@ export interface CityStats {
   demandC: number;
   demandI: number;
   pollution: number;
+  era: string;
+  prestige: number;
+  fires: number;
 }
 
 export interface CityEvent {
@@ -57,6 +62,8 @@ export interface SerializedCity {
     residents: number;
     workers: number;
     age: number;
+    onFire?: boolean;
+    fireAge?: number;
   }>;
   completedMissions?: string[];
   happyBoost?: number;
@@ -65,6 +72,15 @@ export interface SerializedCity {
 
 const TICKS_PER_DAY = 24;
 const DAYS_PER_MONTH = 8;
+export const FIRE_BURN_TICKS = 12;
+
+export function eraName(pop: number): string {
+  if (pop >= 800) return "Metropolis";
+  if (pop >= 400) return "City";
+  if (pop >= 120) return "Town";
+  if (pop >= 40) return "Village";
+  return "Hamlet";
+}
 
 export class City {
   readonly size: number;
@@ -79,6 +95,7 @@ export class City {
   completedMissions = new Set<string>();
   happyBoost = 0;
   happyBoostUntil = 0;
+  dirty = new Set<string>();
   private milestones = new Set<number>();
 
   constructor(size = 40, name = "Aetheris") {
@@ -101,6 +118,8 @@ export class City {
           residents: 0,
           workers: 0,
           age: 0,
+          onFire: false,
+          fireAge: 0,
         });
       }
     }
@@ -169,7 +188,9 @@ export class City {
       return { ok: false, reason: "Docks must face the river." };
     }
     if (this.money < cost) return { ok: false, reason: "The treasury cannot afford this." };
-    if (def.unique && this.hasUnique(def.id)) return { ok: false, reason: "Only one City Hall may stand." };
+    if (def.unique && this.hasUnique(def.id)) {
+      return { ok: false, reason: `Only one ${def.name} may stand.` };
+    }
     const pop = this.population();
     if (pop < def.unlockPop) {
       return { ok: false, reason: `Unlocks at ${def.unlockPop} citizens.` };
@@ -192,6 +213,9 @@ export class City {
     tile.age = 0;
     tile.residents = 0;
     tile.workers = 0;
+    tile.onFire = false;
+    tile.fireAge = 0;
+    this.markDirty(x, y);
     this.floodUtilities();
     this.collectMissions();
     return true;
@@ -211,7 +235,10 @@ export class City {
     tile.powered = false;
     tile.watered = false;
     tile.age = 0;
+    tile.onFire = false;
+    tile.fireAge = 0;
     this.money += refund;
+    this.markDirty(x, y);
     this.floodUtilities();
     this.collectMissions();
     return { ok: true, refund };
@@ -242,7 +269,48 @@ export class City {
     tile.age = 0;
     this.floodUtilities();
     this.collectMissions();
+    this.markDirty(x, y);
     return { ok: true, name: to.name };
+  }
+
+  markDirty(x: number, y: number): void {
+    this.dirty.add(`${x},${y}`);
+  }
+
+  takeDirty(): Array<{ x: number; y: number }> {
+    const out = [...this.dirty].map((key) => {
+      const [x, y] = key.split(",").map(Number);
+      return { x, y };
+    });
+    this.dirty.clear();
+    return out;
+  }
+
+  hasFireCover(x: number, y: number): boolean {
+    const hall = this.def("fire");
+    const radius = hall?.serviceRadius ?? 8;
+    for (const t of this.tiles) {
+      if (t.buildingId !== "fire") continue;
+      const def = this.def("fire");
+      if (!def) continue;
+      if (!this.hasRoadAccess(t.x, t.y)) continue;
+      if (def.powerUse > 0 && !t.powered) continue;
+      if (def.waterUse > 0 && !t.watered) continue;
+      const dist = Math.abs(t.x - x) + Math.abs(t.y - y);
+      if (dist <= radius) return true;
+    }
+    return false;
+  }
+
+  ignite(x: number, y: number): boolean {
+    const tile = this.get(x, y);
+    if (!tile?.buildingId || tile.road) return false;
+    if (tile.buildingId === "fire" || tile.buildingId === "park" || tile.buildingId === "plaza") return false;
+    if (tile.onFire) return false;
+    tile.onFire = true;
+    tile.fireAge = 0;
+    this.markDirty(x, y);
+    return true;
   }
 
   activeMissions(): typeof MISSIONS {
@@ -343,12 +411,24 @@ export class City {
         service += 0.4;
         park += 2;
       }
+      if (d.id === "inn" && dist <= d.serviceRadius) {
+        service += 0.35;
+      }
+      if (d.id === "beacon" && dist <= d.serviceRadius) {
+        service += 0.25;
+        park += 1.5;
+      }
+      if (d.id === "observatory") {
+        service += 0.2;
+        park += 1.2;
+      }
     }
     return { park, service, pollution };
   }
 
   private operating(tile: Tile, def: BuildingDef): boolean {
     if (def.isRoad) return true;
+    if (tile.onFire) return false;
     if (!this.hasRoadAccess(tile.x, tile.y)) return false;
     if (def.powerUse > 0 && !tile.powered) return false;
     if (def.waterUse > 0 && !tile.watered) return false;
@@ -358,6 +438,8 @@ export class City {
   tick(): CityEvent[] {
     this.events = [];
     this.tickCount += 1;
+    this.floodUtilities();
+    this.resolveFires();
     this.floodUtilities();
 
     let jobs = 0;
@@ -419,6 +501,7 @@ export class City {
       if (!on) h -= 22;
       if (this.taxRate > 0.12) h -= (this.taxRate - 0.12) * 180;
       if (this.tickCount < this.happyBoostUntil) h += this.happyBoost;
+      h += this.wonderSpirit();
       h = Math.max(8, Math.min(100, h));
       happinessAcc += h;
       happyTiles += 1;
@@ -480,7 +563,12 @@ export class City {
       } else if (def.category === "industrial") {
         industrial += tile.workers * 4.6;
       } else if (def.id === "dock") {
-        commercial += this.operating(tile, def) ? 92 : 12;
+        const beaconLit = this.tiles.some((t) => {
+          if (t.buildingId !== "beacon") return false;
+          const b = this.def("beacon");
+          return Boolean(b && this.operating(t, b));
+        });
+        commercial += this.operating(tile, def) ? (beaconLit ? 184 : 92) : 12;
       }
     }
     const income = Math.floor((residential + commercial + industrial) * this.taxRate * 18);
@@ -493,19 +581,83 @@ export class City {
     void employed;
   }
 
+  private wonderSpirit(): number {
+    let n = 0;
+    for (const t of this.tiles) {
+      if (!t.buildingId) continue;
+      const def = this.def(t.buildingId);
+      if (!def || !this.operating(t, def)) continue;
+      if (def.id === "observatory") n += 8;
+      if (def.id === "beacon") n += 3;
+      if (def.id === "cityhall") n += 2;
+    }
+    return n;
+  }
+
+  private resolveFires(): void {
+    for (const tile of this.tiles) {
+      if (!tile.onFire) continue;
+      if (this.hasFireCover(tile.x, tile.y)) {
+        tile.onFire = false;
+        tile.fireAge = 0;
+        this.markDirty(tile.x, tile.y);
+        this.events.push({ type: "event", message: "The fire hall quells a blaze." });
+        continue;
+      }
+      tile.fireAge += 1;
+      tile.residents = Math.max(0, tile.residents - 2);
+      tile.workers = 0;
+      if (tile.fireAge < FIRE_BURN_TICKS) continue;
+      const def = tile.buildingId ? this.def(tile.buildingId) : undefined;
+      const name = def?.name ?? "plot";
+      tile.buildingId = null;
+      tile.road = false;
+      tile.residents = 0;
+      tile.workers = 0;
+      tile.onFire = false;
+      tile.fireAge = 0;
+      tile.powered = false;
+      tile.watered = false;
+      this.markDirty(tile.x, tile.y);
+      this.events.push({ type: "event", message: `Fire consumed the ${name}.` });
+    }
+  }
+
+  private startRandomFire(): void {
+    const candidates = this.tiles.filter((t) => {
+      if (!t.buildingId || t.road || t.onFire) return false;
+      if (t.buildingId === "fire" || t.buildingId === "park" || t.buildingId === "plaza") return false;
+      const d = this.def(t.buildingId);
+      return Boolean(d && (d.category === "industrial" || d.category === "residential" || d.category === "commercial"));
+    });
+    if (!candidates.length) return;
+    const heavy = candidates.filter((t) => this.def(t.buildingId!)?.category === "industrial");
+    const pool = heavy.length ? heavy : candidates;
+    const tile = pool[Math.floor(Math.random() * pool.length)]!;
+    if (!this.ignite(tile.x, tile.y)) return;
+    const name = this.def(tile.buildingId!)?.name ?? "building";
+    const covered = this.hasFireCover(tile.x, tile.y);
+    this.events.push({
+      type: "event",
+      message: covered
+        ? `Sparks catch the ${name}. The brigade is already moving.`
+        : `Fire at the ${name}! Raise a fire hall or it will burn.`,
+    });
+  }
+
   private rollEvent(): void {
     if (this.population() < 8) return;
-    if (Math.random() > 0.38) return;
+    if (Math.random() > 0.4) return;
     const roll = Math.random();
-    if (roll < 0.28) {
+    if (roll < 0.22) {
       this.happyBoost = 14;
       this.happyBoostUntil = this.tickCount + 40;
       this.events.push({ type: "event", message: "Lanterns drift the river. Spirit lifts for a season." });
-    } else if (roll < 0.52) {
+    } else if (roll < 0.42) {
       const purse = 900 + Math.floor(Math.random() * 1600);
       this.money += purse;
       this.events.push({ type: "event", message: `River traders pay harbor dues: +$${purse.toLocaleString()}.` });
-    } else if (roll < 0.74) {
+    } else if (roll < 0.6) {
       let gained = 0;
       for (const tile of this.tiles) {
         const def = tile.buildingId ? this.def(tile.buildingId) : undefined;
@@ -518,6 +670,8 @@ export class City {
       if (gained) {
         this.events.push({ type: "event", message: `A generous harvest. ${gained} new souls arrive.` });
       }
+    } else if (roll < 0.78) {
+      this.startRandomFire();
     } else {
       this.happyBoost = -10;
       this.happyBoostUntil = this.tickCount + 28;
@@ -586,6 +740,8 @@ export class City {
         let h = 52 + Math.min(22, cov.park * 1.4) + Math.min(16, cov.service * 10);
         h -= Math.min(28, cov.pollution);
         if (!on) h -= 22;
+        if (tile.onFire) h -= 18;
+        h += this.wonderSpirit();
         happinessAcc += Math.max(8, Math.min(100, h));
         happyTiles += 1;
       }
@@ -597,6 +753,11 @@ export class City {
     const demandR = Math.max(0, Math.min(1, (jobs - population) / 40 + 0.25));
     const demandC = Math.max(0, Math.min(1, cJobs / 40 + population / 200));
     const demandI = Math.max(0, Math.min(1, iJobs / 40 + population / 260));
+    const prestige =
+      (this.hasUnique("cityhall") ? 4 : 0) +
+      (this.hasUnique("beacon") ? 5 : 0) +
+      (this.hasUnique("observatory") ? 6 : 0);
+    const fires = this.tiles.reduce((n, t) => n + (t.onFire ? 1 : 0), 0);
 
     return {
       money: this.money,
@@ -619,6 +780,9 @@ export class City {
       demandC,
       demandI,
       pollution,
+      era: eraName(population),
+      prestige,
+      fires,
     };
   }
 
@@ -643,6 +807,8 @@ export class City {
           residents: t.residents,
           workers: t.workers,
           age: t.age,
+          onFire: t.onFire,
+          fireAge: t.fireAge,
         })),
     };
   }
@@ -664,6 +830,8 @@ export class City {
       tile.residents = rec.residents;
       tile.workers = rec.workers;
       tile.age = rec.age;
+      tile.onFire = Boolean(rec.onFire);
+      tile.fireAge = rec.fireAge ?? 0;
     }
     city.floodUtilities();
     return city;

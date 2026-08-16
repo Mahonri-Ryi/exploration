@@ -99,6 +99,21 @@ button, input { font-family: inherit; }
 }
 .inspect h3 { margin: 0 0 6px; font-family: var(--display); font-size: 16px; letter-spacing: 0.08em; }
 .inspect p, .inspect li { font-size: 13px; color: var(--muted); }
+.inspect li.blaze { color: #e07a6a; }
+.stat.fire-stat b { color: var(--bad); }
+.help {
+  position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%);
+  width: min(520px, 86vw); padding: 16px 18px;
+  background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(12px);
+}
+.help h3 { margin: 0 0 8px; font-family: var(--display); letter-spacing: 0.1em; font-size: 15px; }
+.help ul { margin: 0; padding-left: 18px; }
+.help li { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.help kbd {
+  display: inline-block; padding: 0 5px; border: 1px solid var(--line);
+  border-radius: 3px; color: var(--gold); font-size: 11px;
+}
+.toast.warn { border-color: rgba(224, 122, 106, 0.55); }
 .inspect ul { padding-left: 16px; margin: 8px 0 12px; }
 .upgrade {
   display: flex; align-items: center; gap: 8px; width: 100%;

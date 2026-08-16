@@ -271,6 +271,92 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
       addTree(g, foliage, dark, -0.7, 0.55, rng);
       break;
     }
+    case "inn": {
+      g.add(box(1.55, 1.05, 1.25, facade));
+      g.add(box(1.6, 0.12, 1.3, roof, 1.05));
+      g.add(place(box(0.18, 0.45, 0.18, dark, 1.15), 0.5, -0.35));
+      const lamp = mat(
+        "inn-lamp",
+        () =>
+          new THREE.MeshStandardMaterial({
+            color: 0xf3d48a,
+            emissive: 0xf0b36a,
+            emissiveIntensity: 0.85,
+          }),
+      );
+      g.add(place(cyl(0.05, 0.05, 0.16, lamp, 0.7, 8), 0, 0.62));
+      g.add(place(box(0.7, 0.4, 0.08, glass, 0.2), 0, 0.64));
+      addTree(g, foliage, dark, -0.7, 0.5, rng);
+      break;
+    }
+    case "mill": {
+      g.add(cyl(0.28, 0.36, 1.55, stone, 0, 12));
+      g.add(cyl(0.4, 0.4, 0.38, facade, 1.48, 12));
+      g.add(cyl(0.08, 0.12, 0.28, dark, 1.82, 8));
+      const canvas = mat(
+        "sail",
+        () => new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.85, metalness: 0.05 }),
+      );
+      const sails = new THREE.Group();
+      sails.position.set(0, 1.72, 0.28);
+      for (let i = 0; i < 4; i++) {
+        const arm = new THREE.Group();
+        arm.rotation.z = (i * Math.PI) / 2;
+        const sail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.05, 0.34), canvas);
+        sail.position.y = 0.58;
+        sail.castShadow = true;
+        arm.add(sail);
+        sails.add(arm);
+      }
+      g.add(sails);
+      g.userData.spin = sails;
+      addTree(g, foliage, dark, -0.7, 0.45, rng);
+      break;
+    }
+    case "beacon": {
+      g.add(cyl(0.32, 0.42, 2.4, stone, 0, 12));
+      g.add(cyl(0.28, 0.3, 0.7, facade, 2.35, 12));
+      const lantern = mat(
+        "beacon-lamp",
+        () =>
+          new THREE.MeshStandardMaterial({
+            color: 0x7ee7f2,
+            emissive: 0x3ad4c8,
+            emissiveIntensity: 1.6,
+          }),
+      );
+      g.add(cyl(0.18, 0.18, 0.45, lantern, 3.0, 12));
+      g.add(cyl(0.22, 0.08, 0.18, trim, 3.4, 10));
+      const plank = mat("plank", () => new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.85 }));
+      g.add(place(box(0.9, 0.08, 1.2, plank), 0.55, 0.15));
+      const light = new THREE.PointLight(0x7ee7f2, 1.4, 14);
+      light.position.set(0, 3.3, 0);
+      g.add(light);
+      break;
+    }
+    case "observatory": {
+      g.add(cyl(0.7, 0.85, 1.05, stone, 0, 16));
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.72, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), trim);
+      dome.position.y = 1.05;
+      dome.castShadow = true;
+      g.add(dome);
+      g.add(place(box(0.16, 0.55, 0.7, dark, 1.15), 0, 0.2));
+      const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.85, 8), dark);
+      scope.rotation.z = 0.55;
+      scope.position.set(0.15, 1.55, 0);
+      g.add(scope);
+      const glow = mat(
+        "obs-glow",
+        () =>
+          new THREE.MeshStandardMaterial({
+            color: 0x9fd4e6,
+            emissive: 0x3ad4c8,
+            emissiveIntensity: 0.7,
+          }),
+      );
+      g.add(cyl(0.12, 0.12, 0.12, glow, 1.7, 8));
+      break;
+    }
     default: {
       g.add(box(1.2, Math.max(0.4, def.height * 0.35), 1.2, facade));
     }
@@ -286,6 +372,7 @@ export function createBuilding(def: BuildingDef, seed: number): THREE.Group {
   pad.rotation.x = -Math.PI / 2;
   pad.position.y = 0.015;
   g.add(pad);
+  addFireFx(g);
   return g;
 }
 
@@ -304,6 +391,29 @@ function addTree(
   leaf.position.set(x, 0.48 + rng() * 0.08, z);
   leaf.castShadow = true;
   g.add(trunk, leaf);
+}
+
+function addFireFx(g: THREE.Group): void {
+  const fire = new THREE.Group();
+  fire.name = "firefx";
+  fire.visible = false;
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.38, 0.95, 7),
+    new THREE.MeshStandardMaterial({
+      color: 0xff6a2a,
+      emissive: 0xff3a00,
+      emissiveIntensity: 1.5,
+      transparent: true,
+      opacity: 0.88,
+    }),
+  );
+  flame.position.y = 1.15;
+  const inner = flame.clone();
+  inner.scale.set(0.55, 0.7, 0.55);
+  inner.position.y = 1.48;
+  fire.add(flame, inner);
+  g.add(fire);
+  g.userData.fire = fire;
 }
 
 function hex(color: number): string {

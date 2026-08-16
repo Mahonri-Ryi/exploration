@@ -314,4 +314,110 @@ describe("utilities and economy", () => {
     expect(city.completedMissions.has("avenue")).toBe(true);
     expect(city.money).toBeGreaterThan(before - 25);
   });
+
+  it("lets a windmill feed power without a water main", () => {
+    const city = new City(20, "Test");
+    city.money = 200000;
+    let x = 4;
+    let y = 4;
+    for (let yy = 3; yy < 14; yy++) {
+      for (let xx = 3; xx < 14; xx++) {
+        if (!city.get(xx, yy)?.water && !city.get(xx + 2, yy)?.water) {
+          x = xx;
+          y = yy;
+        }
+      }
+    }
+    expect(city.place("mill", x, y)).toBe(true);
+    expect(city.place("road", x + 1, y)).toBe(true);
+    expect(city.place("cottage", x + 2, y)).toBe(true);
+    city.floodUtilities();
+    expect(city.get(x + 2, y)!.powered).toBe(true);
+    expect(city.stats().powerSupply).toBeGreaterThanOrEqual(48);
+    expect(city.completedMissions.has("wind")).toBe(true);
+    expect(city.stats().era).toBe("Hamlet");
+  });
+
+  it("requires the river beacon to face water and stand alone", () => {
+    const city = new City(24, "Test");
+    city.money = 200000;
+    const inland = emptyLand(city);
+    const t = city.get(inland.x, inland.y)!;
+    t.buildingId = "cottage";
+    t.residents = 40;
+    let dry = { x: inland.x, y: inland.y };
+    for (let y = 2; y < 22; y++) {
+      for (let x = 2; x < 22; x++) {
+        const tile = city.get(x, y)!;
+        if (!tile.water && !tile.buildingId && !city.neighbors4(x, y).some((n) => n.water)) {
+          dry = { x, y };
+        }
+      }
+    }
+    expect(city.canPlace("beacon", dry.x, dry.y).ok).toBe(false);
+    let shore = { x: 0, y: 0 };
+    outer: for (let y = 2; y < 22; y++) {
+      for (let x = 2; x < 22; x++) {
+        const tile = city.get(x, y)!;
+        if (tile.water || tile.buildingId) continue;
+        if (city.neighbors4(x, y).some((n) => n.water)) {
+          shore = { x, y };
+          break outer;
+        }
+      }
+    }
+    expect(city.place("beacon", shore.x, shore.y)).toBe(true);
+    expect(city.completedMissions.has("lamp")).toBe(true);
+    let other = shore;
+    for (let y = 2; y < 22; y++) {
+      for (let x = 2; x < 22; x++) {
+        const tile = city.get(x, y)!;
+        if (!tile.water && !tile.buildingId && city.neighbors4(x, y).some((n) => n.water)) {
+          other = { x, y };
+        }
+      }
+    }
+    expect(city.canPlace("beacon", other.x, other.y).ok).toBe(false);
+  });
+
+  it("lets a fire hall quench a blaze and otherwise consumes the plot", () => {
+    const city = new City(24, "Test");
+    city.money = 200000;
+    const { x, y } = emptyLand(city);
+    expect(city.place("cottage", x, y)).toBe(true);
+    expect(city.ignite(x, y)).toBe(true);
+    expect(city.get(x, y)?.onFire).toBe(true);
+    for (let i = 0; i < 12; i++) city.tick();
+    expect(city.get(x, y)?.buildingId).toBeNull();
+
+    const city2 = new City(24, "Test");
+    city2.money = 200000;
+    let ox = 5;
+    let oy = 5;
+    for (let yy = 4; yy < 16; yy++) {
+      for (let xx = 4; xx < 14; xx++) {
+        const tiles = [0, 1, 2].map((i) => city2.get(xx + i, yy));
+        const next = [0, 1, 2].map((i) => city2.get(xx + i, yy + 1));
+        if (tiles.every((t) => t && !t.water) && next.every((t) => t && !t.water)) {
+          ox = xx;
+          oy = yy;
+        }
+      }
+    }
+    const home = city2.get(ox, oy)!;
+    home.buildingId = "cottage";
+    home.residents = 80;
+    expect(city2.place("power", ox + 1, oy)).toBe(true);
+    expect(city2.place("water", ox + 1, oy + 1)).toBe(true);
+    expect(city2.place("road", ox + 2, oy)).toBe(true);
+    expect(city2.place("fire", ox + 2, oy + 1)).toBe(true);
+    expect(city2.place("cottage", ox, oy + 1)).toBe(true);
+    city2.floodUtilities();
+    expect(city2.ignite(ox, oy + 1)).toBe(true);
+    city2.tick();
+    expect(city2.get(ox, oy + 1)?.onFire).toBe(false);
+    expect(city2.get(ox, oy + 1)?.buildingId).toBe("cottage");
+    const loaded = City.deserialize(city2.serialize());
+    expect(loaded.get(ox, oy + 1)?.buildingId).toBe("cottage");
+  });
 });

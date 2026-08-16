@@ -46,6 +46,8 @@ export class World {
   readonly buildings = new Map<string, THREE.Group>();
   readonly roads = new Map<string, THREE.Mesh>();
   private cars: Car[] = [];
+  private boats: Car[] = [];
+  private birds: THREE.Group[] = [];
   private roadGroup = new THREE.Group();
   private buildGroup = new THREE.Group();
   private wilds = new THREE.Group();
@@ -210,7 +212,7 @@ export class World {
 
     this.hover = new THREE.Mesh(
       new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96),
-      new THREE.MeshBasicMaterial({ color: 0xf2d48a, transparent: true, opacity: 0.18 }),
+      new THREE.MeshBasicMaterial({ color: 0xf2d48a, transparent: true, opacity: 0.32 }),
     );
     this.hover.rotation.x = -Math.PI / 2;
     this.hover.position.y = 0.07;
@@ -223,6 +225,7 @@ export class World {
     this.composer.addPass(new SMAAPass());
     this.composer.addPass(new OutputPass());
 
+    this.spawnBirds();
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -340,6 +343,7 @@ export class World {
       else if (tile.buildingId && tile.buildingId !== "road") this.ensureBuilding(city, tile.x, tile.y);
     }
     this.refreshCars(city);
+    this.refreshBoats(city);
     this.scatterWilds(city);
   }
 
@@ -371,6 +375,7 @@ export class World {
       }
     }
     this.refreshCars(city);
+    this.refreshBoats(city);
     this.scatterWilds(city);
   }
 
@@ -518,6 +523,86 @@ export class World {
     return g;
   }
 
+  private refreshBoats(city: City): void {
+    for (const b of this.boats) this.scene.remove(b.mesh);
+    this.boats = [];
+    const nodes: { x: number; y: number }[] = [];
+    for (const t of city.tiles) if (t.water) nodes.push({ x: t.x, y: t.y });
+    if (nodes.length < 4) return;
+    const docks = city.tiles.filter((t) => t.buildingId === "dock").length;
+    const count = Math.min(12, 4 + docks * 2);
+    for (let i = 0; i < count; i++) {
+      const path = this.randomWaterPath(city, nodes);
+      if (path.length < 2) continue;
+      const mesh = this.makeBoat(i);
+      this.scene.add(mesh);
+      this.boats.push({ mesh, path, i: 0, t: Math.random(), speed: 0.55 + Math.random() * 0.35 });
+    }
+  }
+
+  private randomWaterPath(city: City, nodes: { x: number; y: number }[]): THREE.Vector3[] {
+    const start = nodes[Math.floor(Math.random() * nodes.length)];
+    const pts: THREE.Vector3[] = [];
+    let cur = start;
+    let prev: { x: number; y: number } | null = null;
+    for (let i = 0; i < 22; i++) {
+      pts.push(tileToWorld(cur.x, cur.y, city.size).add(new THREE.Vector3(0, 0.18, 0)));
+      const opts = city.neighbors4(cur.x, cur.y).filter((n) => n.water);
+      if (!opts.length) break;
+      let next = opts[Math.floor(Math.random() * opts.length)];
+      if (opts.length > 1 && prev) {
+        const filtered = opts.filter((n) => n.x !== prev!.x || n.y !== prev!.y);
+        if (filtered.length) next = filtered[Math.floor(Math.random() * filtered.length)];
+      }
+      prev = cur;
+      cur = { x: next.x, y: next.y };
+    }
+    return pts;
+  }
+
+  private makeBoat(seed: number): THREE.Group {
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.12, 0.28),
+      new THREE.MeshStandardMaterial({ color: seed % 2 ? 0xcfc4b0 : 0x8a5a32, roughness: 0.55 }),
+    );
+    hull.position.y = 0.06;
+    hull.castShadow = true;
+    const cabin = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.14, 0.2),
+      new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.6 }),
+    );
+    cabin.position.set(-0.08, 0.16, 0);
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.025, 0.55, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3a2a1c }),
+    );
+    mast.position.set(0.1, 0.38, 0);
+    const sail = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.22, 0.32),
+      new THREE.MeshStandardMaterial({ color: 0xe8e2d4, side: THREE.DoubleSide, roughness: 0.9 }),
+    );
+    sail.position.set(0.18, 0.42, 0);
+    g.add(hull, cabin, mast, sail);
+    return g;
+  }
+
+  private spawnBirds(): void {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.7 });
+    for (let i = 0; i < 8; i++) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), mat);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.015, 0.05), mat);
+      g.add(body, wing);
+      g.userData.phase = Math.random() * Math.PI * 2;
+      g.userData.radius = 18 + Math.random() * 16;
+      g.userData.height = 7 + Math.random() * 5;
+      g.userData.speed = 0.18 + Math.random() * 0.12;
+      this.scene.add(g);
+      this.birds.push(g);
+    }
+  }
+
   setGhost(def: BuildingDef | null, x: number, y: number, valid: boolean): void {
     if (!def) {
       this.ghost.visible = false;
@@ -577,20 +662,49 @@ export class World {
     this.renderer.toneMappingExposure = 0.82 + (1 - night) * 0.28;
     this.bloom.strength = 0.18 + night * 0.32;
 
-    for (const [, b] of this.buildings) setBuildingNight(b, night);
+    for (const [, b] of this.buildings) {
+      setBuildingNight(b, night);
+      const fire = b.userData.fire as THREE.Group | undefined;
+      const tilePos = b.userData.tile as { x: number; y: number } | undefined;
+      const tile = tilePos ? city.get(tilePos.x, tilePos.y) : null;
+      if (fire) {
+        fire.visible = Boolean(tile?.onFire);
+        if (fire.visible) {
+          fire.rotation.y += dt * 5;
+          const pulse = 0.82 + Math.sin(this.waterTime * 11 + (tilePos?.x ?? 0)) * 0.18;
+          fire.scale.set(pulse, 0.9 + pulse * 0.25, pulse);
+        }
+      }
+      const spin = b.userData.spin as THREE.Object3D | undefined;
+      if (spin) spin.rotation.z += dt * 1.15;
+    }
 
     for (const car of this.cars) {
-      if (car.path.length < 2) continue;
-      car.t += (dt * car.speed) / 2.1;
-      while (car.t >= 1) {
-        car.t -= 1;
-        car.i = (car.i + 1) % (car.path.length - 1);
-      }
-      const a = car.path[car.i];
-      const b = car.path[car.i + 1];
-      car.mesh.position.lerpVectors(a, b, car.t);
-      car.mesh.lookAt(b);
+      this.advanceMover(car, dt, 2.1);
     }
+    for (const boat of this.boats) {
+      this.advanceMover(boat, dt, 2.6);
+    }
+    for (const bird of this.birds) {
+      const phase = (bird.userData.phase as number) + dt * (bird.userData.speed as number);
+      bird.userData.phase = phase;
+      const r = bird.userData.radius as number;
+      bird.position.set(Math.cos(phase) * r, bird.userData.height as number, Math.sin(phase) * r * 0.72);
+      bird.lookAt(Math.cos(phase + 0.2) * r, bird.position.y, Math.sin(phase + 0.2) * r * 0.72);
+    }
+  }
+
+  private advanceMover(car: Car, dt: number, scale: number): void {
+    if (car.path.length < 2) return;
+    car.t += (dt * car.speed) / scale;
+    while (car.t >= 1) {
+      car.t -= 1;
+      car.i = (car.i + 1) % (car.path.length - 1);
+    }
+    const a = car.path[car.i];
+    const b = car.path[car.i + 1];
+    car.mesh.position.lerpVectors(a, b, car.t);
+    car.mesh.lookAt(b);
   }
 
   render(): void {
@@ -616,6 +730,7 @@ export class World {
     for (const t of city.tiles) {
       if (t.water && !t.road) ctx.fillStyle = "#2aa0b8";
       else if (t.road) ctx.fillStyle = t.water ? "#c9a227" : "#5a5e66";
+      else if (t.onFire) ctx.fillStyle = "#ff6a2a";
       else if (!t.buildingId) continue;
       else {
         const def = CATALOG_BY_ID[t.buildingId];

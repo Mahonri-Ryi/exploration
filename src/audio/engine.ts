@@ -7,7 +7,8 @@ export type SfxName =
   | "coin"
   | "unlock"
   | "whoosh"
-  | "construction";
+  | "construction"
+  | "fire";
 
 const SFX: SfxName[] = [
   "ui_click",
@@ -19,6 +20,7 @@ const SFX: SfxName[] = [
   "unlock",
   "whoosh",
   "construction",
+  "fire",
 ];
 
 export class AudioEngine {

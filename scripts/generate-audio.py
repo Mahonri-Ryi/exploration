@@ -182,6 +182,24 @@ def construction() -> np.ndarray:
     return fade_edges(hit, 6)
 
 
+def fire() -> np.ndarray:
+    n = int(0.85 * SR)
+    rng = np.random.default_rng(91)
+    raw = rng.uniform(-1, 1, n)
+    rumble = lowpass(raw, 0.18)
+    tt = t(n)
+    env = np.exp(-tt * 1.6) * (0.55 + 0.45 * sine(tt, 6))
+    sig = 0.45 * rumble * env
+    for _ in range(18):
+        start = int(rng.uniform(0.02, 0.72) * SR)
+        length = int(rng.uniform(0.012, 0.045) * SR)
+        burst = np.hanning(length) * rng.uniform(-1, 1, length) * rng.uniform(0.15, 0.35)
+        end = min(n, start + length)
+        sig[start:end] += burst[: end - start]
+    sig += 0.18 * sine(tt, 70) * env
+    return fade_edges(sig * 0.9, 40)
+
+
 def ambient_day() -> np.ndarray:
     n = int(12 * SR)
     tt = t(n)
@@ -236,6 +254,7 @@ def main() -> None:
         "unlock": unlock,
         "whoosh": whoosh,
         "construction": construction,
+        "fire": fire,
         "ambient_day": ambient_day,
         "ambient_night": ambient_night,
     }

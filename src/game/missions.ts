@@ -72,6 +72,48 @@ export const MISSIONS: Mission[] = [
     reward: 5000,
     check: (c) => c.population() >= 100,
   },
+  {
+    id: "wind",
+    title: "Catch the wind",
+    detail: "Raise a windmill for clean power.",
+    reward: 800,
+    check: (c) => c.tiles.some((t) => t.buildingId === "mill"),
+  },
+  {
+    id: "hearthinn",
+    title: "Keep a hearth",
+    detail: "Open an inn so travelers stay the night.",
+    reward: 900,
+    check: (c) => c.tiles.some((t) => t.buildingId === "inn"),
+  },
+  {
+    id: "brigade",
+    title: "Raise a fire hall",
+    detail: "Keep watch against the dry wind.",
+    reward: 1100,
+    check: (c) => c.tiles.some((t) => t.buildingId === "fire"),
+  },
+  {
+    id: "lamp",
+    title: "Light the river",
+    detail: "Raise the unique River Beacon on the shore.",
+    reward: 3500,
+    check: (c) => c.hasUnique("beacon"),
+  },
+  {
+    id: "stars",
+    title: "Read the heavens",
+    detail: "Raise the Observatory.",
+    reward: 4500,
+    check: (c) => c.hasUnique("observatory"),
+  },
+  {
+    id: "borough",
+    title: "A city of two hundred fifty",
+    detail: "Fill the vale until two hundred fifty souls remain.",
+    reward: 8000,
+    check: (c) => c.population() >= 250,
+  },
 ];
 
 export const UPGRADE_OF: Record<string, string> = {

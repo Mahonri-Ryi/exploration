@@ -1,5 +1,5 @@
 import { CATALOG_BY_ID, TOOL_ORDER, type ToolId } from "../game/catalog";
-import { MONTHS, type City, type CityStats } from "../game/city";
+import { MONTHS, FIRE_BURN_TICKS, type City, type CityStats } from "../game/city";
 
 export interface HudHandlers {
   onTool: (id: ToolId) => void;
@@ -34,7 +34,7 @@ export class Hud {
           <img src="./assets/branding/favicon-64.png" alt="" />
           <div>
             <div class="city-name" id="city-name">Aetheris</div>
-            <div class="date" id="date-line">Year 1</div>
+            <div class="date" id="date-line">Hamlet · Year 1</div>
           </div>
         </div>
         <div class="stat-row">
@@ -44,6 +44,7 @@ export class Hud {
           <div class="stat" title="Jobs"><span>Labor</span><b id="stat-jobs">0</b></div>
           <div class="stat" title="Power"><span>Power</span><b id="stat-power">0/0</b></div>
           <div class="stat" title="Water"><span>Water</span><b id="stat-water">0/0</b></div>
+          <div class="stat fire-stat" id="stat-fire-wrap" hidden title="Fires"><span>Blaze</span><b id="stat-fire">0</b></div>
         </div>
         <div class="clock">
           <button data-speed="0">❚❚</button>
@@ -74,6 +75,16 @@ export class Hud {
           <b id="tax-val">9%</b>
         </label>
       </footer>
+      <aside class="help" id="help-sheet" hidden>
+        <h3>Field notes</h3>
+        <ul>
+          <li><kbd>1</kbd>–<kbd>8</kbd> tools · <kbd>I</kbd> survey · <kbd>X</kbd> raze · <kbd>U</kbd> upgrade</li>
+          <li><kbd>H</kbd> this sheet · <kbd>Space</kbd> pause · <kbd>R</kbd> reset camera</li>
+          <li>Right-drag orbits. WASD pans. Scroll zooms. Paint avenues across water for bridges.</li>
+          <li>Windmills make clean power. Docks need shore. The Beacon doubles trader dues.</li>
+          <li>Fires consume a plot unless a live Fire Hall stands nearby. Press U on a surveyed home to raise it.</li>
+        </ul>
+      </aside>
     `;
     const bar = this.root.querySelector("#toolbar")!;
     for (const id of TOOL_ORDER) {
@@ -121,6 +132,10 @@ export class Hud {
     if (id === "inspect") hint.textContent = "Survey a plot. Press U to upgrade a building.";
     else if (id === "bulldoze") hint.textContent = "Raze a structure. The treasury recovers 40%.";
     else if (id === "road") hint.textContent = "Avenue: paint land, or span water as a gold bridge ($90).";
+    else if (id === "mill") hint.textContent = "Windmill: cheap clean power. Needs an avenue, not a water main.";
+    else if (id === "beacon") hint.textContent = "River Beacon: unique lighthouse on the shore. Doubles dock dues.";
+    else if (id === "observatory") hint.textContent = "Observatory: unique wonder. Lifts spirit across the city.";
+    else if (id === "inn") hint.textContent = "Hearth Inn: rooms for travelers. Nearby homes sleep easier.";
     else if (def) hint.textContent = `${def.name}: ${def.description}`;
   }
 
@@ -138,7 +153,7 @@ export class Hud {
   update(city: City, stats: CityStats): void {
     (this.root.querySelector("#city-name") as HTMLElement).textContent = city.name;
     (this.root.querySelector("#date-line") as HTMLElement).textContent =
-      `${MONTHS[stats.month - 1]} ${stats.day}, Year ${stats.year}  ·  ${String(stats.hour).padStart(2, "0")}:00`;
+      `${stats.era} · ${MONTHS[stats.month - 1]} ${stats.day}, Year ${stats.year}  ·  ${String(stats.hour).padStart(2, "0")}:00`;
     (this.root.querySelector("#stat-money") as HTMLElement).textContent = `$${Math.floor(stats.money).toLocaleString()}`;
     (this.root.querySelector("#stat-pop") as HTMLElement).textContent = Math.floor(stats.population).toLocaleString();
     (this.root.querySelector("#stat-happy") as HTMLElement).textContent = `${Math.round(stats.happiness)}%`;
@@ -157,6 +172,12 @@ export class Hud {
     pwr.classList.toggle("bad", stats.powerDemand > stats.powerSupply);
     const wtr = this.root.querySelector("#stat-water")!;
     wtr.classList.toggle("bad", stats.waterDemand > stats.waterSupply);
+    const fireWrap = this.root.querySelector("#stat-fire-wrap") as HTMLElement | null;
+    if (fireWrap) {
+      fireWrap.hidden = stats.fires <= 0;
+      const fireStat = this.root.querySelector("#stat-fire") as HTMLElement | null;
+      if (fireStat) fireStat.textContent = String(stats.fires);
+    }
     this.renderCharter(city);
   }
 
@@ -201,6 +222,7 @@ export class Hud {
         <li>Parcel ${x}, ${y}</li>
         <li>Road ${access ? "connected" : "isolated"}</li>
         <li>Power ${tile.powered ? "live" : "dark"} · Water ${tile.watered ? "flowing" : "dry"}</li>
+        ${tile.onFire ? `<li class="blaze">Ablaze — ${Math.max(0, FIRE_BURN_TICKS - tile.fireAge)} ticks until the plot is lost</li>` : ""}
         ${def && !def.isRoad ? `<li>Residents ${tile.residents}/${def.residents || 0} · Workers ${tile.workers}/${def.jobs || 0}</li>` : ""}
         <li>Park ${cov.park.toFixed(1)} · Watch ${cov.service.toFixed(1)} · Smoke ${cov.pollution.toFixed(1)}</li>
       </ul>
@@ -221,6 +243,13 @@ export class Hud {
     (this.root.querySelector("#inspect-panel") as HTMLElement).hidden = true;
   }
 
+  toggleHelp(): boolean {
+    const sheet = this.root.querySelector("#help-sheet") as HTMLElement | null;
+    if (!sheet) return false;
+    sheet.hidden = !sheet.hidden;
+    return !sheet.hidden;
+  }
+
   lockTools(pop: number): void {
     this.root.querySelectorAll(".tool").forEach((b) => {
       const id = (b as HTMLElement).dataset.tool!;
@@ -232,10 +261,10 @@ export class Hud {
   }
 }
 
-export function toast(message: string): void {
+export function toast(message: string, kind?: "warn"): void {
   const host = document.getElementById("toasts")!;
   const el = document.createElement("div");
-  el.className = "toast";
+  el.className = kind ? `toast ${kind}` : "toast";
   el.textContent = message;
   host.appendChild(el);
   requestAnimationFrame(() => el.classList.add("in"));

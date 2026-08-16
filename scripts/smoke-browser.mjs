@@ -52,7 +52,12 @@ const built = await page.evaluate(() => {
     for (let xx = 12; xx < 26; xx++) {
       const row = [0, 1, 2, 3].map((i) => city.get(xx + i, yy));
       const next = [0, 1, 2, 3].map((i) => city.get(xx + i, yy + 1));
-      if (row.every((t) => t && !t.water && !t.buildingId) && next.every((t) => t && !t.water && !t.buildingId)) {
+      const third = [0, 1, 2, 3].map((i) => city.get(xx + i, yy + 2));
+      if (
+        row.every((t) => t && !t.water && !t.buildingId) &&
+        next.every((t) => t && !t.water && !t.buildingId) &&
+        third.every((t) => t && !t.water && !t.buildingId)
+      ) {
         x = xx;
         y = yy;
         break outer;
@@ -68,6 +73,8 @@ const built = await page.evaluate(() => {
     ["cottage", x + 2, y + 1],
     ["shop", x + 3, y],
     ["park", x + 3, y + 1],
+    ["mill", x, y + 2],
+    ["road", x + 1, y + 2],
   ];
   const results = steps.map(([id, px, py]) => ({ id, ok: api.place(id, px, py), x: px, y: py }));
   api.tick(8);
@@ -88,9 +95,30 @@ if (!built.home?.powered) throw new Error("Cottage is not powered");
 if (!built.home?.watered) throw new Error("Cottage is not watered");
 if (!built.home?.residents) throw new Error("Cottage has no residents after ticks");
 if (built.stats.population <= 0) throw new Error("Population stayed at 0");
+if (built.stats.powerSupply <= 160) throw new Error("Windmill did not add power");
 if (built.stats.powerSupply <= 0 || built.stats.waterSupply <= 0) {
   throw new Error("Utilities did not register supply");
 }
+
+await page.waitForFunction(() => window.__AETHERIS__.stats().population > 0);
+await new Promise((r) => setTimeout(r, 400));
+await page.screenshot({ path: "/tmp/aetheris-smoke.png", fullPage: true });
+
+const waterBlocked = await page.evaluate(() => {
+  const city = window.__AETHERIS__.city();
+  const water = city.tiles.find((t) => t.water);
+  return water ? city.canPlace("cottage", water.x, water.y) : { ok: true, reason: "no water" };
+});
+if (waterBlocked.ok) throw new Error("Water tiles are buildable");
+
+const blaze = await page.evaluate((x, y) => {
+  const api = window.__AETHERIS__;
+  const ok = api.ignite(x, y);
+  api.tick(1);
+  const tile = api.city().get(x, y);
+  return { ok, fires: api.stats().fires, onFire: Boolean(tile?.onFire), buildingId: tile?.buildingId };
+}, built.origin.x + 3, built.origin.y);
+if (!blaze.ok || !blaze.onFire) throw new Error(`Ignite failed: ${JSON.stringify(blaze)}`);
 
 await page.waitForFunction(() => window.__AETHERIS__.stats().population > 0);
 await new Promise((r) => setTimeout(r, 400));
@@ -114,5 +142,5 @@ const fatal = errors.filter(
 );
 if (fatal.length) throw new Error(`Page errors: ${fatal.join(" | ")}`);
 
-console.log(JSON.stringify({ ok: true, stats: built.stats, afterDemolish: after, home: built.home, origin: built.origin }, null, 2));
+console.log(JSON.stringify({ ok: true, stats: built.stats, afterDemolish: after, home: built.home, origin: built.origin, blaze }, null, 2));
 await browser.close();

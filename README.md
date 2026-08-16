@@ -27,14 +27,15 @@ After this repository enables GitHub Pages, the `Deploy Aetheris` workflow publi
 - Left click places the selected tool. Drag to paint roads or raze.
 - Right-drag or middle-drag orbits. Alt/Shift-drag pans. Scroll zooms.
 - `WASD` or arrows travel. `Q`/`E` yaw. `R` resets the camera.
-- `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `Space` pauses.
-- Buildings need **road access**, **power**, and **water** to operate.
-- Paint an avenue onto the river to raise a **bridge**. **Docks** must face the water.
+- `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `H` field notes. `Space` pauses.
+- Buildings need **road access**, **power**, and **water** to operate. **Windmills** make clean power without a water main.
+- Paint an avenue onto the river to raise a **bridge**. **Docks** must face the water. The unique **River Beacon** doubles dock dues.
 - Survey a cottage or shop and press **U** (or the upgrade button) to raise it in place.
-- The **Charter** panel pays gold for first-hour goals. Monthly events can bless or bite.
-- Parks, schools, and services lift spirit. Industry pays well and fouls the air.
+- The **Charter** panel pays gold for first-hour goals. Monthly events can bless the city — or start a **fire**.
+- A live **Fire Hall** quells nearby blazes. Unguarded fires consume the plot.
+- Parks, schools, inns, and services lift spirit. The **Observatory** lifts the whole city.
 - Taxes arrive each month. The levy slider trades income for happiness.
-- Larger buildings also unlock from the toolbar as the population grows.
+- Larger buildings also unlock from the toolbar as the population grows. The date line shows your era (Hamlet through Metropolis).
 
 ## Project layout
 

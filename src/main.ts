@@ -114,6 +114,7 @@ document.getElementById("btn-new")!.addEventListener("click", () => {
   const name = nameInput.value.trim() || "Aetheris";
   startCity(new City(40, name));
   toast(`${name} is founded on the river.`);
+  toast("Lay an avenue, then a windmill or power plant. Press H for field notes.");
   void audio.unlock();
 });
 
@@ -252,6 +253,10 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.key.toLowerCase() === "u" && inspectAt) tryUpgrade(inspectAt.x, inspectAt.y);
   if (e.key.toLowerCase() === "r") cam.reset();
+  if (e.key.toLowerCase() === "h") {
+    hud.toggleHelp();
+    audio.play("ui_click");
+  }
 });
 
 let last = performance.now();
@@ -267,11 +272,13 @@ function frame(now: number): void {
         acc -= step;
         const events = city.tick();
         for (const ev of events) {
-          toast(ev.message);
+          toast(ev.message, ev.message.toLowerCase().includes("fire") || ev.message.toLowerCase().includes("blaze") || ev.message.includes("consumed") ? "warn" : undefined);
           if (ev.type === "milestone" || ev.type === "mission") audio.play("unlock");
-          if (ev.type === "budget" || ev.type === "event") audio.play("coin");
+          else if (ev.type === "event" && /fire|blaze|consumed/i.test(ev.message)) audio.play("fire");
+          else if (ev.type === "budget" || ev.type === "event") audio.play("coin");
         }
         hud.lockTools(city.population());
+        for (const tile of city.takeDirty()) world.syncTile(city, tile.x, tile.y);
       }
     }
     world.update(dt, city);
@@ -301,6 +308,7 @@ declare global {
       place: (id: string, x: number, y: number) => boolean;
       demolish: (x: number, y: number) => boolean;
       upgrade: (x: number, y: number) => boolean;
+      ignite: (x: number, y: number) => boolean;
       tick: (n?: number) => void;
     };
   }
@@ -328,8 +336,14 @@ window.__AETHERIS__ = {
     if (res.ok) world.syncTile(city, x, y);
     return res.ok;
   },
+  ignite: (x, y) => {
+    const ok = city.ignite(x, y);
+    if (ok) world.syncTile(city, x, y);
+    return ok;
+  },
   tick: (n = 1) => {
     for (let i = 0; i < n; i++) city.tick();
+    for (const tile of city.takeDirty()) world.syncTile(city, tile.x, tile.y);
     hud.update(city, city.stats());
     hud.lockTools(city.population());
   },
