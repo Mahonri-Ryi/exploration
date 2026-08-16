@@ -106,7 +106,7 @@ export class World {
     this.renderer.toneMappingExposure = 1.12;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.fog = new THREE.FogExp2(0xb9cce0, 0.011);
+    this.scene.fog = new THREE.FogExp2(0xb9cce0, 0.0048);
     this.scene.background = new THREE.Color(0x8eb6d4);
     this.pmrem = new THREE.PMREMGenerator(this.renderer);
 
@@ -143,7 +143,7 @@ export class World {
     skyU.turbidity.value = 3.2;
     skyU.rayleigh.value = 1.15;
     skyU.mieCoefficient.value = 0.005;
-    skyU.mieDirectionalG.value = 0.82;
+    skyU.mieDirectionalG.value = 0.88;
     this.scene.add(this.sky);
 
     this.probeSky = new Sky();
@@ -1022,12 +1022,13 @@ export class World {
     const mat = this.water.material as THREE.ShaderMaterial;
     if (mat.uniforms?.time) mat.uniforms.time.value = this.waterTime;
 
-    const phase = city.dayPhase();
-    const sunAngle = phase * Math.PI * 2 - Math.PI / 2;
-    const elev = Math.sin(sunAngle);
+    const phase = this.visualPhase(city);
+    const elevAngle = phase * Math.PI * 2 - Math.PI / 2;
+    const elev = Math.sin(elevAngle);
     const night = THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
-    const sunPos = new THREE.Vector3(Math.cos(sunAngle) * 60, Math.max(6, elev * 50 + 10), Math.sin(sunAngle) * 40);
-    const skySun = new THREE.Vector3(Math.cos(sunAngle), elev, Math.sin(sunAngle) * 0.75).normalize().multiplyScalar(100);
+    const az = elevAngle + Math.PI;
+    const sunPos = new THREE.Vector3(Math.cos(az) * 60, Math.max(6, elev * 50 + 10), Math.sin(az) * 40);
+    const skySun = new THREE.Vector3(Math.cos(az), elev, Math.sin(az) * 0.75).normalize().multiplyScalar(100);
     const sunDir = sunPos.clone().normalize();
     const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
     skyU.sunPosition.value.copy(skySun);
@@ -1048,7 +1049,7 @@ export class World {
     this.moon.position.set(-40, 30, -20);
     const fog = this.scene.fog as THREE.FogExp2;
     fog.color.set(night > 0.55 ? 0x101820 : elev < 0.12 ? 0xc4a888 : 0xb9cce0);
-    fog.density = night > 0.5 ? 0.016 : 0.01;
+    fog.density = night > 0.5 ? 0.007 : 0.0042;
     this.scene.background = fog.color;
     this.renderer.toneMappingExposure = 0.78 + (1 - night) * 0.38;
     this.bloom.strength = preferLiteGpu() ? 0.08 + night * 0.18 : 0.16 + night * 0.28;
@@ -1160,8 +1161,13 @@ export class World {
     };
   }
 
+  /** Offset so a new city opens in late morning, not midnight. */
+  private visualPhase(city: City): number {
+    return (city.dayPhase() + 0.42) % 1;
+  }
+
   nightAmount(city: City): number {
-    const phase = city.dayPhase();
+    const phase = this.visualPhase(city);
     const elev = Math.sin(phase * Math.PI * 2 - Math.PI / 2);
     return THREE.MathUtils.smoothstep(-0.15, 0.15, -elev);
   }
