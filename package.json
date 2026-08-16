@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run",
+    "smoke": "node scripts/smoke-browser.mjs",
     "audio": "python3 scripts/generate-audio.py"
   },
   "dependencies": {
