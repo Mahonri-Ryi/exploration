@@ -184,11 +184,11 @@ export class World {
     this.water = new THREE.Mesh(
       new THREE.BufferGeometry(),
       new THREE.MeshStandardMaterial({
-        color: 0x1a9ec4,
-        emissive: 0x0a6e92,
-        emissiveIntensity: 0.62,
-        roughness: 0.18,
-        metalness: 0.28,
+        color: 0x0c6d8a,
+        emissive: 0x04384c,
+        emissiveIntensity: 0.22,
+        roughness: 0.28,
+        metalness: 0.12,
         side: THREE.DoubleSide,
       }),
     );
@@ -197,7 +197,13 @@ export class World {
 
     this.waterFoam = new THREE.Mesh(
       new THREE.BufferGeometry(),
-      new THREE.MeshBasicMaterial({ color: 0xe5f8fc, toneMapped: false }),
+      new THREE.MeshStandardMaterial({
+        color: 0xd7e8d8,
+        roughness: 0.85,
+        metalness: 0,
+        emissive: 0x1a3030,
+        emissiveIntensity: 0.08,
+      }),
     );
     this.waterFoam.renderOrder = 2;
     this.scene.add(this.waterFoam);
@@ -705,7 +711,7 @@ export class World {
     this.waterTime += dt;
     const waterMat = this.water.material as THREE.MeshStandardMaterial;
     if (waterMat.emissiveIntensity !== undefined) {
-      waterMat.emissiveIntensity = 0.48 + Math.sin(this.waterTime * 1.4) * 0.12;
+      waterMat.emissiveIntensity = 0.18 + Math.sin(this.waterTime * 1.4) * 0.05;
     }
 
     const phase = city.dayPhase();

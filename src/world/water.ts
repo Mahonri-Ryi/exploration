@@ -92,7 +92,7 @@ function buildRiverFoam(size: number, tile: number, y: number, segs = 96): THREE
   const uv: number[] = [];
   const idx: number[] = [];
   const halfTiles = WATER_RIVER_HALF * (size - 1);
-  const band = 0.22 / tile;
+  const band = 0.12 / tile;
   const edges: { a: { x: number; z: number }; b: { x: number; z: number } }[][] = [[], []];
   for (let i = 0; i <= segs; i++) {
     const nx = i / segs;
