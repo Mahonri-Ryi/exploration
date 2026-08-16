@@ -595,9 +595,9 @@ window.__AETHERIS__ = {
     id: tutorialStep(city)?.id ?? null,
   }),
   achievements: () => [...city.completedAchievements],
-  project: (x, y, height = 0) => {
+  project: (x, y, height) => {
     const p = tileToWorld(x, y, city.size);
-    p.y = height;
+    p.y = height ?? world.surfaceHeight(x, y);
     p.project(world.camera);
     if (p.z > 1) return null;
     const r = canvas.getBoundingClientRect();

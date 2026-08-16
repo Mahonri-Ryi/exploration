@@ -319,6 +319,10 @@ export class World {
     this.rebuildAll(city);
   }
 
+  surfaceHeight(x: number, y: number): number {
+    return this.heightAt(x, y, this.size);
+  }
+
   private heightAt(x: number, y: number, size: number): number {
     if (isWaterTile(x, y, size)) return -0.06;
     const nx = x / Math.max(1, size - 1);
@@ -836,6 +840,7 @@ export class World {
       while (obj) {
         const tile = obj.userData?.tile as { x: number; y: number } | undefined;
         if (tile && Number.isFinite(tile.x) && Number.isFinite(tile.y)) return tile;
+        if (obj === this.ground) return worldToTile(hit.point, size);
         obj = obj.parent;
       }
     }
