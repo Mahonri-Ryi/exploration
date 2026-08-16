@@ -45,8 +45,8 @@ export class World {
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   readonly moon: THREE.DirectionalLight;
-  readonly water: THREE.Mesh;
-  readonly waterBed: THREE.Mesh;
+  water: THREE.Mesh;
+  waterBed: THREE.Mesh;
   readonly waterFoam: THREE.Mesh;
   readonly ghost: THREE.Group;
   readonly hover: THREE.Mesh;
@@ -284,23 +284,7 @@ export class World {
   }
 
   private rebuildTerrain(city: City): void {
-    const waterGeom = new THREE.BufferGeometry();
-    const bedGeom = new THREE.BufferGeometry();
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const bedPos: number[] = [];
-    const bedUv: number[] = [];
-    const pushQuad = (arr: number[], uv: number[], x: number, y: number, z: number, s: number) => {
-      arr.push(
-        x - s, y, z - s,
-        x + s, y, z - s,
-        x + s, y, z + s,
-        x - s, y, z - s,
-        x + s, y, z + s,
-        x - s, y, z + s,
-      );
-      uv.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-    };
+    const waterTiles: THREE.Vector3[] = [];
     const foamPos: number[] = [];
     const foamUv: number[] = [];
     const pushStrip = (
@@ -316,10 +300,9 @@ export class World {
       for (let x = 0; x < city.size; x++) {
         if (!isWaterTile(x, y, city.size)) continue;
         const p = tileToWorld(x, y, city.size);
-        pushQuad(bedPos, bedUv, p.x, 0.02, p.z, TILE * 0.55);
-        pushQuad(positions, uvs, p.x, 0.18, p.z, TILE * 0.64);
-        const s = TILE * 0.64;
-        const band = 0.1;
+        waterTiles.push(p);
+        const s = TILE * 0.5;
+        const band = 0.12;
         const fy = 0.2;
         if (!isWaterTile(x, y - 1, city.size)) {
           pushStrip(p.x - s, fy, p.z - s, p.x + s, fy, p.z - s, p.x + s, fy, p.z - s + band, p.x - s, fy, p.z - s + band);
@@ -335,19 +318,31 @@ export class World {
         }
       }
     }
-    waterGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    waterGeom.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-    waterGeom.computeVertexNormals();
-    this.water.geometry.dispose();
-    this.water.geometry = waterGeom;
-    this.water.rotation.set(0, 0, 0);
-    this.water.position.set(0, 0, 0);
 
-    bedGeom.setAttribute("position", new THREE.Float32BufferAttribute(bedPos, 3));
-    bedGeom.setAttribute("uv", new THREE.Float32BufferAttribute(bedUv, 2));
-    bedGeom.computeVertexNormals();
+    const dummy = new THREE.Object3D();
+    const bedGeo = new THREE.CircleGeometry(TILE * 0.78, 16);
+    bedGeo.rotateX(-Math.PI / 2);
+    const waterGeo = new THREE.CircleGeometry(TILE * 0.7, 16);
+    waterGeo.rotateX(-Math.PI / 2);
+    const bedMesh = new THREE.InstancedMesh(bedGeo, this.waterBed.material, Math.max(1, waterTiles.length));
+    const waterMesh = new THREE.InstancedMesh(waterGeo, this.water.material, Math.max(1, waterTiles.length));
+    bedMesh.receiveShadow = true;
+    waterTiles.forEach((p, i) => {
+      dummy.position.set(p.x, 0.03, p.z);
+      dummy.updateMatrix();
+      bedMesh.setMatrixAt(i, dummy.matrix);
+      dummy.position.y = 0.17;
+      dummy.updateMatrix();
+      waterMesh.setMatrixAt(i, dummy.matrix);
+    });
+    this.scene.remove(this.waterBed);
+    this.scene.remove(this.water);
     this.waterBed.geometry.dispose();
-    this.waterBed.geometry = bedGeom;
+    this.water.geometry.dispose();
+    this.waterBed = bedMesh;
+    this.water = waterMesh;
+    this.scene.add(this.waterBed);
+    this.scene.add(this.water);
 
     const foamGeom = new THREE.BufferGeometry();
     foamGeom.setAttribute("position", new THREE.Float32BufferAttribute(foamPos, 3));
