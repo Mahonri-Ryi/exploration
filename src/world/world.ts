@@ -452,6 +452,7 @@ export class World {
       line.position.y = 0.05;
       mesh.add(line);
     }
+    mesh.userData.tile = { x, y };
     this.roadGroup.add(mesh);
     this.roads.set(`${x},${y}`, mesh);
   }
@@ -647,6 +648,23 @@ export class World {
     const hit = new THREE.Vector3();
     if (ray.ray.intersectPlane(plane, hit)) return hit;
     return null;
+  }
+
+  /** Prefer a building or road mesh so clicking a roof surveys that plot, not the grass behind it. */
+  pickTile(ndc: THREE.Vector2, size: number): { x: number; y: number } | null {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const hits = ray.intersectObjects([this.buildGroup, this.roadGroup], true);
+    for (const hit of hits) {
+      let obj: THREE.Object3D | null = hit.object;
+      while (obj) {
+        const tile = obj.userData?.tile as { x: number; y: number } | undefined;
+        if (tile && Number.isFinite(tile.x) && Number.isFinite(tile.y)) return tile;
+        obj = obj.parent;
+      }
+    }
+    const ground = this.pickGround(ndc);
+    return ground ? worldToTile(ground, size) : null;
   }
 
   update(dt: number, city: City): void {

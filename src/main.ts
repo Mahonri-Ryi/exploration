@@ -6,7 +6,7 @@ import { tutorialStep } from "./game/tutorial";
 import { hasSave, loadCity, saveCity } from "./game/save";
 import { Hud, toast } from "./ui/hud";
 import { OrbitCam } from "./world/camera";
-import { World, worldToTile } from "./world/world";
+import { World, tileToWorld } from "./world/world";
 import "./style.css";
 
 const canvas = document.getElementById("viewport") as HTMLCanvasElement;
@@ -205,10 +205,8 @@ function ndc(e: { clientX: number; clientY: number }): THREE.Vector2 {
 }
 
 function hoverTile(e: PointerEvent): { x: number; y: number } | null {
-  const hit = world.pickGround(ndc(e));
-  if (!hit) return null;
-  const t = worldToTile(hit, city.size);
-  if (!city.inBounds(t.x, t.y)) return null;
+  const t = world.pickTile(ndc(e), city.size);
+  if (!t || !city.inBounds(t.x, t.y)) return null;
   return t;
 }
 
@@ -441,27 +439,97 @@ declare global {
       stats: () => ReturnType<City["stats"]>;
       running: () => boolean;
       tool: () => ToolId;
+      lookMode: () => boolean;
+      speed: () => number;
       startNew: (name?: string) => void;
+      setTool: (id: ToolId) => void;
       place: (id: string, x: number, y: number) => boolean;
       demolish: (x: number, y: number) => boolean;
       upgrade: (x: number, y: number) => boolean;
+      inspect: (x: number, y: number) => void;
       ignite: (x: number, y: number) => boolean;
       tick: (n?: number) => void;
       skipTutorial: () => void;
       continueTutorial: () => boolean;
       tutorial: () => { done: boolean; index: number; id: string | null };
       achievements: () => string[];
+      project: (x: number, y: number, height?: number) => { x: number; y: number } | null;
+      lookAt: (x: number, y: number) => void;
+      hud: () => {
+        cityName: string;
+        date: string;
+        money: string;
+        souls: string;
+        spirit: string;
+        labor: string;
+        power: string;
+        water: string;
+        blaze: string | null;
+        hint: string;
+        tax: string;
+        primer: { visible: boolean; title: string; wait: string; continueDisabled: boolean };
+        helpOpen: boolean;
+        laurelsOpen: boolean;
+        charterOpen: boolean;
+        inspectOpen: boolean;
+        inspectTitle: string;
+        lookOn: boolean;
+        lockedTools: string[];
+        missions: string[];
+        laurelsEarned: string;
+      };
     };
   }
 }
+
+function readHud() {
+  const q = (sel: string) => hudRoot.querySelector(sel) as HTMLElement | null;
+  const coach = q("#coach");
+  const inspect = q("#inspect-panel");
+  const help = q("#help-sheet");
+  const laurels = q("#laurels-panel");
+  const fireWrap = q("#stat-fire-wrap");
+  return {
+    cityName: q("#city-name")?.textContent ?? "",
+    date: q("#date-line")?.textContent ?? "",
+    money: q("#stat-money")?.textContent ?? "",
+    souls: q("#stat-pop")?.textContent ?? "",
+    spirit: q("#stat-happy")?.textContent ?? "",
+    labor: q("#stat-jobs")?.textContent ?? "",
+    power: q("#stat-power")?.textContent ?? "",
+    water: q("#stat-water")?.textContent ?? "",
+    blaze: fireWrap && !fireWrap.hidden ? q("#stat-fire")?.textContent ?? "0" : null,
+    hint: q("#hint")?.textContent ?? "",
+    tax: q("#tax-val")?.textContent ?? "",
+    primer: {
+      visible: Boolean(coach && !coach.hidden),
+      title: coach?.querySelector("h3")?.textContent ?? "",
+      wait: coach?.querySelector("[data-wait]")?.textContent ?? "",
+      continueDisabled: Boolean((coach?.querySelector("[data-next]") as HTMLButtonElement | null)?.disabled),
+    },
+    helpOpen: Boolean(help && !help.hidden),
+    laurelsOpen: Boolean(laurels && !laurels.hidden),
+    charterOpen: Boolean(q("#charter")?.classList.contains("open")),
+    inspectOpen: Boolean(inspect && !inspect.hidden),
+    inspectTitle: inspect?.querySelector("h3")?.textContent ?? "",
+    lookOn: hud.lookMode,
+    lockedTools: [...hudRoot.querySelectorAll(".tool.locked")].map((el) => (el as HTMLElement).dataset.tool ?? ""),
+    missions: [...hudRoot.querySelectorAll("#charter-list li strong")].map((el) => el.textContent ?? ""),
+    laurelsEarned: laurels?.querySelector("header span")?.textContent ?? "",
+  };
+}
+
 window.__AETHERIS__ = {
   city: () => city,
   stats: () => city.stats(),
   running: () => running,
   tool: () => tool,
+  lookMode: () => cam.lookMode,
+  speed: () => speed,
   startNew: (name = "Aetheris") => {
     startCity(new City(40, name));
   },
+  setTool: (id) => setTool(id),
   place: (id, x, y) => {
     const ok = city.place(id, x, y);
     if (ok) world.syncTile(city, x, y);
@@ -481,9 +549,16 @@ window.__AETHERIS__ = {
     hud.update(city, city.stats());
     return res.ok;
   },
+  inspect: (x, y) => {
+    inspectAt = { x, y };
+    city.note("surveyed");
+    hud.inspect(city, x, y);
+    emitCityEvents();
+  },
   ignite: (x, y) => {
     const ok = city.ignite(x, y);
     if (ok) world.syncTile(city, x, y);
+    hud.update(city, city.stats());
     return ok;
   },
   tick: (n = 1) => {
@@ -507,4 +582,21 @@ window.__AETHERIS__ = {
     id: tutorialStep(city)?.id ?? null,
   }),
   achievements: () => [...city.completedAchievements],
+  project: (x, y, height = 0) => {
+    const p = tileToWorld(x, y, city.size);
+    p.y = height;
+    p.project(world.camera);
+    if (p.z > 1) return null;
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (p.x * 0.5 + 0.5) * r.width + r.left,
+      y: (-p.y * 0.5 + 0.5) * r.height + r.top,
+    };
+  },
+  lookAt: (x, y) => {
+    const p = tileToWorld(x, y, city.size);
+    cam.target.set(p.x, 0, p.z);
+    cam.spherical.radius = 28;
+  },
+  hud: () => readHud(),
 };
