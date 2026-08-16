@@ -1,5 +1,11 @@
 import { ACHIEVEMENTS, LAUREL_CATEGORIES } from "../game/achievements";
-import { CATALOG_BY_ID, TOOL_ORDER, type ToolId } from "../game/catalog";
+import {
+  CATALOG_BY_ID,
+  TOOL_CATEGORIES,
+  categoryForTool,
+  type InfoLayer,
+  type ToolId,
+} from "../game/catalog";
 import { MONTHS, FIRE_BURN_TICKS, type City, type CityStats } from "../game/city";
 import { tutorialStep, TUTORIAL } from "../game/tutorial";
 
@@ -17,6 +23,7 @@ export interface HudHandlers {
   onReplayTutorial: () => void;
   onLook: (on: boolean) => void;
   onToggleHelp: () => void;
+  onLayer: (id: InfoLayer) => void;
 }
 
 const ICONS: Record<string, string> = {
@@ -31,6 +38,8 @@ export class Hud {
   laurelsOpen = false;
   lookMode = false;
   charterOpen = false;
+  category = "survey";
+  layer: InfoLayer = "none";
   private coachId = "";
 
   constructor(root: HTMLElement, handlers: HudHandlers) {
@@ -52,10 +61,19 @@ export class Hud {
         <div class="stat-row">
           <div class="stat" title="Treasury"><span>Treasury</span><b id="stat-money">$0</b></div>
           <div class="stat" title="Population"><span>Souls</span><b id="stat-pop">0</b></div>
-          <div class="stat" title="Happiness"><span>Spirit</span><b id="stat-happy">—</b></div>
+          <div class="stat meter" title="Happiness">
+            <span>Spirit</span><b id="stat-happy">—</b>
+            <i class="meter-fill" id="meter-happy"></i>
+          </div>
           <div class="stat" title="Jobs"><span>Labor</span><b id="stat-jobs">0</b></div>
-          <div class="stat" title="Power"><span>Power</span><b id="stat-power">0/0</b></div>
-          <div class="stat" title="Water"><span>Water</span><b id="stat-water">0/0</b></div>
+          <div class="stat meter" title="Power">
+            <span>Power</span><b id="stat-power">0/0</b>
+            <i class="meter-fill power" id="meter-power"></i>
+          </div>
+          <div class="stat meter" title="Water">
+            <span>Water</span><b id="stat-water">0/0</b>
+            <i class="meter-fill water" id="meter-water"></i>
+          </div>
           <div class="stat fire-stat" id="stat-fire-wrap" hidden title="Fires"><span>Blaze</span><b id="stat-fire">0</b></div>
         </div>
         <div class="clock">
@@ -76,29 +94,38 @@ export class Hud {
         <canvas id="minimap" width="40" height="40" aria-label="Minimap"></canvas>
       </section>
       <div class="play-chrome">
-      <footer class="bottom">
-        <div class="mobile-dock">
-          <button type="button" id="btn-look" title="Drag to orbit">Look</button>
-          <button type="button" id="btn-charter" title="Charter and minimap">Charter</button>
-          <button type="button" id="btn-notes" title="Field notes">Notes</button>
+      <div class="build-dock">
+        <div class="demand-row">
+          <label class="demand-item" title="Residential demand">Homes <i id="bar-r"></i></label>
+          <label class="demand-item" title="Commercial demand">Shops <i id="bar-c"></i></label>
+          <label class="demand-item" title="Industrial demand">Works <i id="bar-i"></i></label>
         </div>
-        <div class="demand">
-          <label>R <i id="bar-r"></i></label>
-          <label>C <i id="bar-c"></i></label>
-          <label>I <i id="bar-i"></i></label>
+        <div class="layers" id="layers">
+          <button type="button" data-layer="none" class="on">City</button>
+          <button type="button" data-layer="power">Power</button>
+          <button type="button" data-layer="water">Water</button>
+          <button type="button" data-layer="spirit">Spirit</button>
         </div>
-        <div class="hint" id="hint">Tap to build · two fingers orbit · Look to drag the view</div>
-        <label class="tax">Levy
-          <input id="tax" type="range" min="4" max="16" value="9" />
-          <b id="tax-val">9%</b>
-        </label>
-      </footer>
-      <aside class="toolbar" id="toolbar"></aside>
+        <div class="asset-tray" id="asset-tray"></div>
+        <nav class="cat-rail" id="cat-rail"></nav>
+        <footer class="bottom">
+          <div class="mobile-dock">
+            <button type="button" id="btn-look" title="Drag to orbit">Look</button>
+            <button type="button" id="btn-charter" title="Charter and minimap">Charter</button>
+            <button type="button" id="btn-notes" title="Field notes">Notes</button>
+          </div>
+          <div class="hint" id="hint">Tap a category, then a building. Right-drag orbits.</div>
+          <label class="tax">Levy
+            <input id="tax" type="range" min="4" max="16" value="9" />
+            <b id="tax-val">9%</b>
+          </label>
+        </footer>
+      </div>
       </div>
       <aside class="help" id="help-sheet" hidden>
         <h3>Field notes</h3>
         <ul>
-          <li>Phone: tap to build, drag Avenue to paint, two fingers to orbit and pinch to zoom. Look lets one finger orbit.</li>
+          <li>Phone: tap a category, then a building. Drag Avenue to paint. Two fingers orbit. Look lets one finger orbit.</li>
           <li><kbd>1</kbd>–<kbd>8</kbd> tools · <kbd>I</kbd> survey · <kbd>X</kbd> raze · <kbd>U</kbd> upgrade · <kbd>L</kbd> look</li>
           <li><kbd>H</kbd> this sheet · <kbd>Space</kbd> pause · <kbd>R</kbd> reset camera</li>
           <li>Right-drag orbits. WASD pans. Scroll zooms. Paint avenues across water for bridges.</li>
@@ -111,24 +138,46 @@ export class Hud {
       <aside class="coach" id="coach" hidden></aside>
       <section class="laurels" id="laurels-panel" hidden></section>
     `;
-    const bar = this.root.querySelector("#toolbar")!;
-    for (const id of TOOL_ORDER) {
-      const def = CATALOG_BY_ID[id];
-      const icon = def ? def.icon : ICONS[id];
-      const name = def ? def.name : id === "inspect" ? "Survey" : "Raze";
-      const cost = def ? `$${def.cost.toLocaleString()}` : "";
-      const btn = document.createElement("button");
-      btn.className = id === "bulldoze" ? "tool danger" : "tool";
-      btn.dataset.tool = id;
-      btn.title = def ? `${def.name} — ${def.description}` : name;
-      btn.innerHTML = `
-        <img src="./assets/icons/${icon}" alt="${name}" />
-        <em>${name}</em>
-        <small>${cost}</small>
-      `;
-      btn.addEventListener("click", () => this.handlers.onTool(id));
-      bar.appendChild(btn);
+    const rail = this.root.querySelector("#cat-rail")!;
+    const trays = this.root.querySelector("#asset-tray")!;
+    for (const cat of TOOL_CATEGORIES) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "cat";
+      tab.dataset.cat = cat.id;
+      tab.textContent = cat.label;
+      tab.addEventListener("click", () => this.openCategory(cat.id));
+      rail.appendChild(tab);
+      const tray = document.createElement("div");
+      tray.className = "tray";
+      tray.dataset.tray = cat.id;
+      tray.hidden = cat.id !== "survey";
+      for (const id of cat.tools) {
+        const def = CATALOG_BY_ID[id];
+        const icon = def ? def.icon : ICONS[id];
+        const name = def ? def.name : id === "inspect" ? "Survey" : "Raze";
+        const cost = def ? `$${def.cost.toLocaleString()}` : "";
+        const btn = document.createElement("button");
+        btn.className = id === "bulldoze" ? "tool danger" : "tool";
+        btn.dataset.tool = id;
+        btn.title = def ? `${def.name} — ${def.description}` : name;
+        btn.innerHTML = `
+          <img src="./assets/icons/${icon}" alt="${name}" />
+          <em>${name}</em>
+          <small>${cost}</small>
+        `;
+        btn.addEventListener("click", () => this.handlers.onTool(id));
+        tray.appendChild(btn);
+      }
+      trays.appendChild(tray);
     }
+    this.root.querySelectorAll("[data-layer]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = ((el as HTMLElement).dataset.layer ?? "none") as InfoLayer;
+        this.setLayer(id);
+        this.handlers.onLayer(id);
+      });
+    });
     this.root.querySelectorAll("[data-speed]").forEach((el) => {
       el.addEventListener("click", () => {
         const n = Number((el as HTMLElement).dataset.speed);
@@ -151,18 +200,33 @@ export class Hud {
       this.handlers.onTax(n);
     });
     this.bindChromeHeight();
+    this.openCategory("survey");
+  }
+
+  openCategory(id: string): void {
+    this.category = id;
+    this.root.querySelectorAll(".cat").forEach((b) => {
+      b.classList.toggle("on", (b as HTMLElement).dataset.cat === id);
+    });
+    this.root.querySelectorAll(".tray").forEach((t) => {
+      (t as HTMLElement).hidden = (t as HTMLElement).dataset.tray !== id;
+    });
+    this.bindChromeHeight();
+  }
+
+  setLayer(id: InfoLayer): void {
+    this.layer = id;
+    this.root.querySelectorAll("[data-layer]").forEach((b) => {
+      b.classList.toggle("on", (b as HTMLElement).dataset.layer === id);
+    });
   }
 
   private bindChromeHeight(): void {
-    const chrome = this.root.querySelector(".play-chrome") as HTMLElement | null;
+    const chrome = this.root.querySelector(".build-dock") as HTMLElement | null;
     if (!chrome) return;
     const apply = () => {
       const box = chrome.getBoundingClientRect().height;
-      const bar = this.root.querySelector(".bottom") as HTMLElement | null;
-      const tools = this.root.querySelector(".toolbar") as HTMLElement | null;
-      const sum =
-        (bar?.getBoundingClientRect().height ?? 0) + (tools?.getBoundingClientRect().height ?? 0);
-      const h = box > 1 ? box : sum;
+      const h = box;
       if (h > 0) this.root.style.setProperty("--chrome-h", `${Math.ceil(h)}px`);
     };
     if (typeof ResizeObserver !== "undefined") new ResizeObserver(apply).observe(chrome);
@@ -171,6 +235,7 @@ export class Hud {
 
   setTool(id: ToolId): void {
     this.tool = id;
+    this.openCategory(categoryForTool(id).id);
     this.root.querySelectorAll(".tool").forEach((b) => {
       b.classList.toggle("on", (b as HTMLElement).dataset.tool === id);
     });
@@ -246,6 +311,16 @@ export class Hud {
     (this.root.querySelector("#bar-r") as HTMLElement).style.width = `${stats.demandR * 100}%`;
     (this.root.querySelector("#bar-c") as HTMLElement).style.width = `${stats.demandC * 100}%`;
     (this.root.querySelector("#bar-i") as HTMLElement).style.width = `${stats.demandI * 100}%`;
+    const happyFill = this.root.querySelector("#meter-happy") as HTMLElement | null;
+    if (happyFill) happyFill.style.width = `${Math.max(0, Math.min(100, stats.happiness))}%`;
+    const pwrFill = this.root.querySelector("#meter-power") as HTMLElement | null;
+    if (pwrFill) {
+      pwrFill.style.width = `${stats.powerSupply ? Math.min(100, (stats.powerDemand / stats.powerSupply) * 100) : 0}%`;
+    }
+    const wtrFill = this.root.querySelector("#meter-water") as HTMLElement | null;
+    if (wtrFill) {
+      wtrFill.style.width = `${stats.waterSupply ? Math.min(100, (stats.waterDemand / stats.waterSupply) * 100) : 0}%`;
+    }
     const money = this.root.querySelector("#stat-money")!;
     money.classList.toggle("bad", stats.money < 0);
     const pwr = this.root.querySelector("#stat-power")!;
@@ -303,10 +378,14 @@ export class Hud {
         <button type="button" class="text-btn" data-close>Close</button>
       </header>
       <p>${def ? def.description : waterText}</p>
+      <div class="chips">
+        <span class="chip ${access ? "on" : "off"}">Road</span>
+        <span class="chip ${tile.powered ? "on" : "off"}">Power</span>
+        <span class="chip ${tile.watered ? "on" : "off"}">Water</span>
+        ${tile.onFire ? `<span class="chip blaze">Fire</span>` : ""}
+      </div>
       <ul>
         <li>Parcel ${x}, ${y}</li>
-        <li>Road ${access ? "connected" : "isolated"}</li>
-        <li>Power ${tile.powered ? "live" : "dark"} · Water ${tile.watered ? "flowing" : "dry"}</li>
         ${tile.onFire ? `<li class="blaze">Ablaze — ${Math.max(0, FIRE_BURN_TICKS - tile.fireAge)} ticks until the plot is lost</li>` : ""}
         ${def && !def.isRoad ? `<li>Residents ${tile.residents}/${def.residents || 0} · Workers ${tile.workers}/${def.jobs || 0}</li>` : ""}
         <li>Park ${cov.park.toFixed(1)} · Watch ${cov.service.toFixed(1)} · Smoke ${cov.pollution.toFixed(1)}</li>
@@ -351,8 +430,10 @@ export class Hud {
   }
 
   private pulseTool(id: ToolId | undefined): void {
-    this.root.querySelectorAll(".tool").forEach((b) => b.classList.remove("pulse"));
+    this.root.querySelectorAll(".tool, .cat").forEach((b) => b.classList.remove("pulse"));
     if (!id) return;
+    const cat = categoryForTool(id);
+    this.root.querySelector(`.cat[data-cat="${cat.id}"]`)?.classList.add("pulse");
     this.root.querySelector(`.tool[data-tool="${id}"]`)?.classList.add("pulse");
   }
 

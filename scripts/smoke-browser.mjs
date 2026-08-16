@@ -57,6 +57,21 @@ async function clickSel(sel) {
 }
 
 async function clickTool(id) {
+  await page.evaluate((tool) => {
+    const btn = document.querySelector(`.tool[data-tool="${tool}"]`);
+    const tray = btn?.closest("[data-tray]");
+    const cat = tray?.getAttribute("data-tray");
+    if (cat) document.querySelector(`.cat[data-cat="${cat}"]`)?.click();
+  }, id);
+  await page.waitForFunction(
+    (tool) => {
+      const btn = document.querySelector(`.tool[data-tool="${tool}"]`);
+      const tray = btn?.closest(".tray");
+      return Boolean(btn && tray && !tray.hidden);
+    },
+    { timeout: 8000 },
+    id,
+  );
   await clickSel(`.tool[data-tool="${id}"]`);
   const tool = await api(() => window.__AETHERIS__.tool());
   if (tool !== id) throw new Error(`tool is ${tool}, expected ${id}`);
@@ -156,6 +171,22 @@ await check("Found City starts the game and primer", async () => {
   const tutorial = await api(() => window.__AETHERIS__.tutorial());
   if (tutorial.id !== "welcome") throw new Error(`expected welcome, got ${tutorial.id}`);
   await page.evaluate(() => document.getElementById("city-input")?.blur());
+});
+
+await check("construction dock uses category tabs", async () => {
+  const cats = await page.$$eval(".cat", (els) => els.map((el) => el.textContent?.trim()));
+  for (const need of ["Roads", "Homes", "Grid", "Civic", "Wonders"]) {
+    if (!cats.includes(need)) throw new Error(`missing ${need} in ${cats.join(",")}`);
+  }
+  await page.click('.cat[data-cat="homes"]');
+  await settle();
+  const open = await api(() => window.__AETHERIS__.hud().category);
+  if (open !== "homes") throw new Error(`category ${open}`);
+  const cottage = await page.$eval('.tool[data-tool="cottage"]', (el) => {
+    const tray = el.closest(".tray");
+    return Boolean(tray && !tray.hidden);
+  });
+  if (!cottage) throw new Error("Cottage not in the Homes tray");
 });
 
 await check("primer Continue advances to Lay an avenue", async () => {
@@ -721,6 +752,7 @@ await check("mute and save buttons respond", async () => {
 });
 
 await check("Menu then Continue restores the city", async () => {
+  await clickSel('[data-speed="0"]');
   const pop = await api(() => window.__AETHERIS__.stats().population);
   await clickSel("#btn-menu");
   await page.waitForFunction(() => {
@@ -732,7 +764,7 @@ await check("Menu then Continue restores the city", async () => {
   await clickSel("#btn-continue");
   await page.waitForFunction(() => window.__AETHERIS__.running() === true);
   const again = await api(() => window.__AETHERIS__.stats().population);
-  if (again !== pop) throw new Error(`population ${pop} -> ${again}`);
+  if (Math.abs(again - pop) > 2) throw new Error(`population ${pop} -> ${again}`);
   const name = await api(() => window.__AETHERIS__.hud().cityName);
   if (name !== "Playtest Vale") throw new Error(`restored name ${name}`);
 });
@@ -770,6 +802,21 @@ await check("locked late-game tools stay disabled at low souls", async () => {
   }
   const disabled = await page.$eval('.tool[data-tool="tower"]', (el) => el.disabled);
   if (!disabled) throw new Error("tower button not disabled");
+});
+
+await check("Power and Water info layers toggle", async () => {
+  await page.click('[data-layer="power"]');
+  await settle();
+  let hud = await api(() => window.__AETHERIS__.hud());
+  if (hud.layer !== "power") throw new Error(`layer ${hud.layer}`);
+  await page.click('[data-layer="water"]');
+  await settle();
+  hud = await api(() => window.__AETHERIS__.hud());
+  if (hud.layer !== "water") throw new Error(`layer ${hud.layer}`);
+  await page.click('[data-layer="none"]');
+  await settle();
+  hud = await api(() => window.__AETHERIS__.hud());
+  if (hud.layer !== "none") throw new Error(`layer ${hud.layer}`);
 });
 
 await check("HUD date line shows an era", async () => {

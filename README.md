@@ -89,7 +89,7 @@ Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub
 - **Continue** restores the last save from this browser.
 - **Phone / tablet:** tap to place, drag Avenue or Raze to paint, two fingers to orbit and pinch to zoom. **Look** (or `L`) lets one finger orbit without building. Tools, Look, Charter, and Notes sit along the bottom.
 - **Android:** Chrome or Samsung Internet. Pinch on the vale zooms the camera (not the page). You can also Add to Home screen for a full-screen tab.
-- **Computer:** left click places the selected tool. Drag to paint roads or raze. Right-drag or middle-drag orbits. Alt/Shift-drag pans. Scroll zooms.
+- **Computer:** pick a category on the bottom dock (Roads, Homes, Shops, Works, Parks, Grid, Civic, Wonders), then a building. Left click places. Drag to paint roads or raze. Right-drag orbits. Scroll zooms. **Power / Water / Spirit** layers tint the map like Cities: Skylines.
 - `WASD` or arrows travel. `Q`/`E` yaw. `R` resets the camera. `L` toggles look mode.
 - `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `H` field notes. `A` laurels. `Space` pauses.
 - Buildings need **road access**, **power**, and **water** to operate. **Windmills** make clean power without a water main.
