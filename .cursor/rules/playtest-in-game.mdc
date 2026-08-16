@@ -1,0 +1,22 @@
+---
+description: Test every implemented feature individually in the running Aetheris game
+alwaysApply: true
+---
+
+# Playtest features in the live game
+
+Every feature you implement must be tested **individually in the actual running game** before you call it done. Unit tests and code review are not enough on their own.
+
+## Required
+
+1. Start the game (`npm run dev` → http://localhost:5173) and wait for the title screen.
+2. Found a city (or Continue) and exercise **that feature by itself** in the live UI — click the real tool, place or toggle it, and watch the HUD, toasts, and world.
+3. Confirm the intended behavior: placement or control works, simulation/HUD update, and nothing else broke.
+4. If the feature has several parts (place, operate, upgrade, raze, save), test each part separately.
+5. Keep or extend `npm run smoke` so the live Chrome playtest covers the new feature as its own named check.
+
+## Do not
+
+- Ship a feature that only has unit tests and was never opened in the browser.
+- Batch-test a pile of new systems in one undifferentiated click-through. Isolate each one.
+- Treat “the page loaded” as proof the feature works.

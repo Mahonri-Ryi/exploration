@@ -114,5 +114,7 @@ Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub
 
 ```bash
 npm test
-npm run smoke   # live Chrome playtest against npm run dev
+npm run smoke   # live Chrome playtest — each feature is a named in-game check
 ```
+
+Agents must also playtest every new feature individually in the running game (`npm run dev` → http://localhost:5173), not only with unit tests.
