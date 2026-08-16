@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { AudioEngine } from "./audio/engine";
 import { CATALOG_BY_ID, type ToolId } from "./game/catalog";
 import { City } from "./game/city";
+import { tutorialStep } from "./game/tutorial";
 import { hasSave, loadCity, saveCity } from "./game/save";
 import { Hud, toast } from "./ui/hud";
 import { OrbitCam } from "./world/camera";
@@ -52,6 +53,37 @@ const hud = new Hud(hudRoot, {
     refreshContinue();
   },
   onUpgrade: (x, y) => tryUpgrade(x, y),
+  onSkipTutorial: () => {
+    city.skipTutorial();
+    audio.play("ui_click");
+    toast("Primer closed. Press H for field notes, A for laurels.");
+    hud.update(city, city.stats());
+  },
+  onTutorialContinue: () => {
+    if (!city.continueTutorial()) {
+      audio.play("error");
+      toast("Finish this step in the world first.");
+      return;
+    }
+    audio.play("ui_click");
+    if (city.tutorialDone) toast("Primer complete. The vale is yours.");
+    hud.update(city, city.stats());
+  },
+  onToggleLaurels: () => {
+    const open = hud.toggleLaurels(city);
+    if (open) city.note("laurels");
+    audio.play("ui_click");
+    hud.update(city, city.stats());
+  },
+  onReplayTutorial: () => {
+    city.restartTutorial();
+    hud.laurelsOpen = false;
+    const panel = hudRoot.querySelector("#laurels-panel") as HTMLElement | null;
+    if (panel) panel.hidden = true;
+    audio.play("ui_click");
+    toast("The primer begins again.");
+    hud.update(city, city.stats());
+  },
 });
 
 function setTool(id: ToolId): void {
@@ -78,6 +110,19 @@ function tryUpgrade(x: number, y: number): void {
   }
   hud.inspect(city, x, y);
   hud.lockTools(city.population());
+  emitCityEvents();
+}
+
+function emitCityEvents(): void {
+  for (const ev of city.events) {
+    if (ev.type === "laurel") {
+      toast(ev.message);
+      audio.play("unlock");
+    } else if (ev.type === "tutorial") {
+      toast(ev.message);
+      audio.play("ui_hover");
+    }
+  }
 }
 
 function persist(message?: string): void {
@@ -114,7 +159,7 @@ document.getElementById("btn-new")!.addEventListener("click", () => {
   const name = nameInput.value.trim() || "Aetheris";
   startCity(new City(40, name));
   toast(`${name} is founded on the river.`);
-  toast("Lay an avenue, then a windmill or power plant. Press H for field notes.");
+  toast("A short primer will walk you through the vale. Skip it anytime.");
   void audio.unlock();
 });
 
@@ -150,8 +195,10 @@ function hoverTile(e: PointerEvent): { x: number; y: number } | null {
 function applyTool(x: number, y: number): void {
   if (tool === "inspect") {
     inspectAt = { x, y };
+    city.note("surveyed");
     hud.inspect(city, x, y);
     audio.play("ui_hover");
+    emitCityEvents();
     return;
   }
   if (tool === "bulldoze") {
@@ -160,6 +207,7 @@ function applyTool(x: number, y: number): void {
       world.syncTile(city, x, y);
       audio.play("demolish");
       if (res.refund) toast(`Salvage returned $${res.refund.toLocaleString()}.`);
+      emitCityEvents();
     } else if (res.reason) {
       audio.play("error");
     }
@@ -177,6 +225,7 @@ function applyTool(x: number, y: number): void {
   world.syncTile(city, x, y);
   audio.play(def.isRoad ? "place" : "construction");
   hud.lockTools(city.population());
+  emitCityEvents();
   for (const ev of city.events) {
     if (ev.type !== "mission") continue;
     toast(ev.message);
@@ -246,16 +295,24 @@ window.addEventListener("keydown", (e) => {
   };
   if (map[e.key.toLowerCase()]) setTool(map[e.key.toLowerCase()]);
   if (e.key === "Escape") setTool("inspect");
+  if (e.key.toLowerCase() === "u" && inspectAt) tryUpgrade(inspectAt.x, inspectAt.y);
+  if (e.key.toLowerCase() === "r") cam.reset();
+  if (e.key.toLowerCase() === "h") {
+    const open = hud.toggleHelp();
+    if (open) city.note("helpOpened");
+    audio.play("ui_click");
+  }
+  if (e.key.toLowerCase() === "a") {
+    const open = hud.toggleLaurels(city);
+    if (open) city.note("laurels");
+    audio.play("ui_click");
+    hud.update(city, city.stats());
+  }
   if (e.key === " ") {
     e.preventDefault();
     speed = speed === 0 ? 1 : 0;
     hud.setSpeed(speed);
-  }
-  if (e.key.toLowerCase() === "u" && inspectAt) tryUpgrade(inspectAt.x, inspectAt.y);
-  if (e.key.toLowerCase() === "r") cam.reset();
-  if (e.key.toLowerCase() === "h") {
-    hud.toggleHelp();
-    audio.play("ui_click");
+    if (speed === 0) city.note("paused");
   }
 });
 
@@ -273,7 +330,8 @@ function frame(now: number): void {
         const events = city.tick();
         for (const ev of events) {
           toast(ev.message, ev.message.toLowerCase().includes("fire") || ev.message.toLowerCase().includes("blaze") || ev.message.includes("consumed") ? "warn" : undefined);
-          if (ev.type === "milestone" || ev.type === "mission") audio.play("unlock");
+          if (ev.type === "milestone" || ev.type === "mission" || ev.type === "laurel") audio.play("unlock");
+          else if (ev.type === "tutorial") audio.play("ui_hover");
           else if (ev.type === "event" && /fire|blaze|consumed/i.test(ev.message)) audio.play("fire");
           else if (ev.type === "budget" || ev.type === "event") audio.play("coin");
         }
@@ -310,6 +368,10 @@ declare global {
       upgrade: (x: number, y: number) => boolean;
       ignite: (x: number, y: number) => boolean;
       tick: (n?: number) => void;
+      skipTutorial: () => void;
+      continueTutorial: () => boolean;
+      tutorial: () => { done: boolean; index: number; id: string | null };
+      achievements: () => string[];
     };
   }
 }
@@ -324,16 +386,20 @@ window.__AETHERIS__ = {
   place: (id, x, y) => {
     const ok = city.place(id, x, y);
     if (ok) world.syncTile(city, x, y);
+    hud.update(city, city.stats());
+    hud.lockTools(city.population());
     return ok;
   },
   demolish: (x, y) => {
     const res = city.demolish(x, y);
     if (res.ok) world.syncTile(city, x, y);
+    hud.update(city, city.stats());
     return res.ok;
   },
   upgrade: (x, y) => {
     const res = city.upgrade(x, y);
     if (res.ok) world.syncTile(city, x, y);
+    hud.update(city, city.stats());
     return res.ok;
   },
   ignite: (x, y) => {
@@ -347,4 +413,19 @@ window.__AETHERIS__ = {
     hud.update(city, city.stats());
     hud.lockTools(city.population());
   },
+  skipTutorial: () => {
+    city.skipTutorial();
+    hud.update(city, city.stats());
+  },
+  continueTutorial: () => {
+    const ok = city.continueTutorial();
+    hud.update(city, city.stats());
+    return ok;
+  },
+  tutorial: () => ({
+    done: city.tutorialDone,
+    index: city.tutorialIndex,
+    id: tutorialStep(city)?.id ?? null,
+  }),
+  achievements: () => [...city.completedAchievements],
 };

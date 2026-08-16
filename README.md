@@ -22,17 +22,17 @@ After this repository enables GitHub Pages, the `Deploy Aetheris` workflow publi
 
 ## How to play
 
-- **Found City** starts a new map with a $75,000 treasury.
+- **Found City** starts a new map with a $75,000 treasury and a short **primer** that teaches roads, power, water, homes, jobs, parks, upgrades, the river, fires, and laurels. Skip it anytime.
 - **Continue** restores the last save from this browser.
 - Left click places the selected tool. Drag to paint roads or raze.
 - Right-drag or middle-drag orbits. Alt/Shift-drag pans. Scroll zooms.
 - `WASD` or arrows travel. `Q`/`E` yaw. `R` resets the camera.
-- `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `H` field notes. `Space` pauses.
+- `1`–`8` pick common tools. `X` razes. `I` surveys. `U` upgrades. `H` field notes. `A` laurels. `Space` pauses.
 - Buildings need **road access**, **power**, and **water** to operate. **Windmills** make clean power without a water main.
 - Paint an avenue onto the river to raise a **bridge**. **Docks** must face the water. The unique **River Beacon** doubles dock dues.
 - Survey a cottage or shop and press **U** (or the upgrade button) to raise it in place.
-- The **Charter** panel pays gold for first-hour goals. Monthly events can bless the city — or start a **fire**.
-- A live **Fire Hall** quells nearby blazes. Unguarded fires consume the plot.
+- The **Charter** panel pays gold for first-hour goals. **Laurels** are trophies for exploring every system.
+- Monthly events can bless the city — or start a **fire**. A live **Fire Hall** quells nearby blazes.
 - Parks, schools, inns, and services lift spirit. The **Observatory** lifts the whole city.
 - Taxes arrive each month. The levy slider trades income for happiness.
 - Larger buildings also unlock from the toolbar as the population grows. The date line shows your era (Hamlet through Metropolis).

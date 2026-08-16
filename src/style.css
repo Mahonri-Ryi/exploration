@@ -89,7 +89,49 @@ button, input { font-family: inherit; }
 .tool small { color: var(--gold); font-size: 10px; }
 .tool.on { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
 .tool.locked { opacity: 0.35; }
-.tool.danger { margin-top: 10px; border-color: rgba(224, 122, 106, 0.45); }
+  .clock button.pulse, .tax input.pulse {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold) inset, 0 0 12px rgba(212, 177, 90, 0.45);
+  animation: pulse-tool 1.4s ease-in-out infinite;
+}
+@keyframes pulse-tool {
+  50% { box-shadow: 0 0 0 1px var(--gold) inset, 0 0 18px rgba(58, 212, 200, 0.55); }
+}
+.text-btn {
+  cursor: pointer; border: none; background: transparent; color: var(--gold);
+  letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; padding: 4px 0;
+}
+.coach {
+  position: absolute; left: 132px; bottom: 86px; width: min(360px, 42vw);
+  padding: 14px 16px 12px; background: var(--glass); border: 1px solid var(--line);
+  backdrop-filter: blur(12px); z-index: 6;
+}
+.coach header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.coach header span { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
+.coach h3 { margin: 8px 0 6px; font-family: var(--display); font-size: 16px; letter-spacing: 0.06em; }
+.coach p { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.coach footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.coach em { font-style: normal; font-size: 11px; color: var(--teal); }
+.coach button.primary {
+  cursor: pointer; padding: 8px 12px; letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px;
+  background: linear-gradient(180deg, #d4b15a, #9a7428); color: #1a1408; border: 1px solid #e6c56a;
+}
+.coach button.primary:disabled { opacity: 0.4; cursor: default; }
+.laurels {
+  position: absolute; left: 50%; top: 90px; transform: translateX(-50%);
+  width: min(520px, 86vw); max-height: 70vh; overflow: auto;
+  padding: 14px 16px; background: var(--glass); border: 1px solid var(--line);
+  backdrop-filter: blur(12px); z-index: 7;
+}
+.laurels header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.laurels h3 { margin: 0; font-family: var(--display); letter-spacing: 0.1em; font-size: 15px; flex: 1; }
+.laurels header span { color: var(--gold); font-size: 12px; }
+.laurels h4 { margin: 10px 0 4px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.laurels ul { margin: 0; padding: 0; list-style: none; }
+.laurels li { margin: 0 0 6px; font-size: 12px; }
+.laurels li.on strong { color: var(--ink); }
+.laurels li.off { opacity: 0.4; }
+.laurels li span { display: block; color: var(--muted); font-size: 11px; }
 .tool.danger.on { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
 
 .inspect {

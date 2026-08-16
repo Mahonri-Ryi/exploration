@@ -1,5 +1,7 @@
 import { CATALOG_BY_ID, isWaterTile, type BuildingDef } from "./catalog";
+import { ACHIEVEMENTS } from "./achievements";
 import { BRIDGE_COST, MISSIONS, UPGRADE_OF, upgradeCost } from "./missions";
+import { TUTORIAL } from "./tutorial";
 
 export interface Tile {
   x: number;
@@ -42,8 +44,19 @@ export interface CityStats {
   fires: number;
 }
 
+export interface CityFlags {
+  surveyed: boolean;
+  upgraded: boolean;
+  razed: boolean;
+  paused: boolean;
+  helpOpened: boolean;
+  laurels: boolean;
+  quenched: boolean;
+  taxed: boolean;
+}
+
 export interface CityEvent {
-  type: "milestone" | "budget" | "info" | "mission" | "event";
+  type: "milestone" | "budget" | "info" | "mission" | "event" | "tutorial" | "laurel";
   message: string;
 }
 
@@ -66,6 +79,10 @@ export interface SerializedCity {
     fireAge?: number;
   }>;
   completedMissions?: string[];
+  completedAchievements?: string[];
+  flags?: Partial<CityFlags>;
+  tutorialIndex?: number;
+  tutorialDone?: boolean;
   happyBoost?: number;
   happyBoostUntil?: number;
 }
@@ -73,6 +90,17 @@ export interface SerializedCity {
 const TICKS_PER_DAY = 24;
 const DAYS_PER_MONTH = 8;
 export const FIRE_BURN_TICKS = 12;
+
+export const EMPTY_FLAGS: CityFlags = {
+  surveyed: false,
+  upgraded: false,
+  razed: false,
+  paused: false,
+  helpOpened: false,
+  laurels: false,
+  quenched: false,
+  taxed: false,
+};
 
 export function eraName(pop: number): string {
   if (pop >= 800) return "Metropolis";
@@ -93,6 +121,10 @@ export class City {
   lastExpenses = 0;
   events: CityEvent[] = [];
   completedMissions = new Set<string>();
+  completedAchievements = new Set<string>();
+  flags: CityFlags = { ...EMPTY_FLAGS };
+  tutorialIndex = 0;
+  tutorialDone = false;
   happyBoost = 0;
   happyBoostUntil = 0;
   dirty = new Set<string>();
@@ -217,7 +249,7 @@ export class City {
     tile.fireAge = 0;
     this.markDirty(x, y);
     this.floodUtilities();
-    this.collectMissions();
+    this.refreshProgress();
     return true;
   }
 
@@ -239,8 +271,9 @@ export class City {
     tile.fireAge = 0;
     this.money += refund;
     this.markDirty(x, y);
+    this.flags.razed = true;
     this.floodUtilities();
-    this.collectMissions();
+    this.refreshProgress();
     return { ok: true, refund };
   }
 
@@ -268,8 +301,9 @@ export class City {
     tile.workers = 0;
     tile.age = 0;
     this.floodUtilities();
-    this.collectMissions();
+    this.flags.upgraded = true;
     this.markDirty(x, y);
+    this.refreshProgress();
     return { ok: true, name: to.name };
   }
 
@@ -327,6 +361,73 @@ export class City {
       const ev: CityEvent = {
         type: "mission",
         message: `Charter complete: ${mission.title}  ·  +$${mission.reward.toLocaleString()}`,
+      };
+      found.push(ev);
+      this.events.push(ev);
+    }
+    return found;
+  }
+
+  note(flag: keyof CityFlags): void {
+    this.flags[flag] = true;
+    this.refreshProgress();
+  }
+
+  refreshProgress(): void {
+    this.collectMissions();
+    this.tryAdvanceTutorial();
+    this.collectAchievements();
+  }
+
+  tryAdvanceTutorial(): void {
+    if (this.tutorialDone) return;
+    while (this.tutorialIndex < TUTORIAL.length) {
+      const step = TUTORIAL[this.tutorialIndex];
+      if (!step.wait || !step.wait(this)) break;
+      this.events.push({ type: "tutorial", message: `Primer: ${step.title}.` });
+      this.tutorialIndex += 1;
+    }
+    if (this.tutorialIndex >= TUTORIAL.length) this.finishTutorial();
+  }
+
+  continueTutorial(): boolean {
+    if (this.tutorialDone) return false;
+    const step = TUTORIAL[this.tutorialIndex];
+    if (!step) {
+      this.finishTutorial();
+      return true;
+    }
+    if (step.wait && !step.wait(this)) return false;
+    this.tutorialIndex += 1;
+    this.tryAdvanceTutorial();
+    this.collectAchievements();
+    return true;
+  }
+
+  skipTutorial(): void {
+    this.finishTutorial();
+    this.collectAchievements();
+  }
+
+  restartTutorial(): void {
+    this.tutorialDone = false;
+    this.tutorialIndex = 0;
+  }
+
+  private finishTutorial(): void {
+    this.tutorialDone = true;
+    this.tutorialIndex = TUTORIAL.length;
+  }
+
+  collectAchievements(): CityEvent[] {
+    const found: CityEvent[] = [];
+    for (const laurel of ACHIEVEMENTS) {
+      if (this.completedAchievements.has(laurel.id)) continue;
+      if (!laurel.check(this)) continue;
+      this.completedAchievements.add(laurel.id);
+      const ev: CityEvent = {
+        type: "laurel",
+        message: `Laurel: ${laurel.title} — ${laurel.detail}`,
       };
       found.push(ev);
       this.events.push(ev);
@@ -526,7 +627,7 @@ export class City {
       this.rollEvent();
     }
 
-    this.collectMissions();
+    this.refreshProgress();
 
     const pop = this.population();
     for (const mark of [50, 150, 400, 800, 1500]) {
@@ -578,6 +679,7 @@ export class City {
       type: "budget",
       message: `Ledger closed: +$${income.toLocaleString()} income, −$${this.lastExpenses.toLocaleString()} upkeep.`,
     });
+    this.flags.taxed = true;
     void employed;
   }
 
@@ -601,6 +703,7 @@ export class City {
         tile.onFire = false;
         tile.fireAge = 0;
         this.markDirty(tile.x, tile.y);
+        this.flags.quenched = true;
         this.events.push({ type: "event", message: "The fire hall quells a blaze." });
         continue;
       }
@@ -795,6 +898,10 @@ export class City {
       taxRate: this.taxRate,
       tickCount: this.tickCount,
       completedMissions: [...this.completedMissions],
+      completedAchievements: [...this.completedAchievements],
+      flags: { ...this.flags },
+      tutorialIndex: this.tutorialIndex,
+      tutorialDone: this.tutorialDone,
       happyBoost: this.happyBoost,
       happyBoostUntil: this.happyBoostUntil,
       tiles: this.tiles
@@ -819,6 +926,10 @@ export class City {
     city.taxRate = data.taxRate;
     city.tickCount = data.tickCount;
     city.completedMissions = new Set(data.completedMissions ?? []);
+    city.completedAchievements = new Set(data.completedAchievements ?? []);
+    city.flags = { ...EMPTY_FLAGS, ...data.flags };
+    city.tutorialIndex = data.tutorialIndex ?? 0;
+    city.tutorialDone = data.tutorialDone ?? (data.tiles?.length ?? 0) > 0;
     city.happyBoost = data.happyBoost ?? 0;
     city.happyBoostUntil = data.happyBoostUntil ?? 0;
     for (const rec of data.tiles) {

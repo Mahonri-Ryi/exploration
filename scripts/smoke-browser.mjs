@@ -43,6 +43,17 @@ if (!titleGone) throw new Error("Title screen still visible after Found City");
 const hudVisible = await page.$eval("#hud", (el) => !el.hidden);
 if (!hudVisible) throw new Error("HUD hidden after Found City");
 
+const primer = await page.evaluate(() => {
+  const coach = document.getElementById("coach");
+  return {
+    tutorial: window.__AETHERIS__.tutorial(),
+    coachVisible: Boolean(coach && !coach.hidden),
+    title: coach?.querySelector("h3")?.textContent ?? "",
+  };
+});
+if (!primer.coachVisible) throw new Error("Primer coach hidden on a new city");
+if (primer.tutorial.id !== "welcome") throw new Error(`Expected welcome primer, got ${JSON.stringify(primer.tutorial)}`);
+
 const built = await page.evaluate(() => {
   const api = window.__AETHERIS__;
   const city = api.city();
@@ -126,10 +137,26 @@ if (!demolished) throw new Error("Demolish failed");
 const after = await page.evaluate(() => window.__AETHERIS__.stats());
 if (after.money <= moneyBefore) throw new Error("Demolish did not refund");
 
+const progress = await page.evaluate(() => {
+  const api = window.__AETHERIS__;
+  api.skipTutorial();
+  return {
+    tutorial: api.tutorial(),
+    laurels: api.achievements(),
+    coachHidden: document.getElementById("coach")?.hidden === true,
+  };
+});
+if (!progress.tutorial.done || !progress.coachHidden) {
+  throw new Error(`Primer did not close: ${JSON.stringify(progress.tutorial)}`);
+}
+if (!progress.laurels.includes("primer")) throw new Error("Field-primer laurel missing");
+if (!progress.laurels.includes("first_mill")) throw new Error("Windmill laurel missing");
+if (!progress.laurels.includes("salvage")) throw new Error("Salvage laurel missing");
+
 const fatal = errors.filter(
   (e) => !/GPU stall|swiftshader|deprecated|favicon|404 .*favicon/i.test(e),
 );
 if (fatal.length) throw new Error(`Page errors: ${fatal.join(" | ")}`);
 
-console.log(JSON.stringify({ ok: true, stats: built.stats, afterDemolish: after, home: built.home, origin: built.origin, blaze }, null, 2));
+console.log(JSON.stringify({ ok: true, stats: built.stats, afterDemolish: after, home: built.home, origin: built.origin, blaze, progress }, null, 2));
 await browser.close();

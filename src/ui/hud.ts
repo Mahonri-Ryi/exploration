@@ -1,5 +1,7 @@
+import { ACHIEVEMENTS, LAUREL_CATEGORIES } from "../game/achievements";
 import { CATALOG_BY_ID, TOOL_ORDER, type ToolId } from "../game/catalog";
 import { MONTHS, FIRE_BURN_TICKS, type City, type CityStats } from "../game/city";
+import { tutorialStep, TUTORIAL } from "../game/tutorial";
 
 export interface HudHandlers {
   onTool: (id: ToolId) => void;
@@ -9,6 +11,10 @@ export interface HudHandlers {
   onSave: () => void;
   onMenu: () => void;
   onUpgrade: (x: number, y: number) => void;
+  onSkipTutorial: () => void;
+  onTutorialContinue: () => void;
+  onToggleLaurels: () => void;
+  onReplayTutorial: () => void;
 }
 
 const ICONS: Record<string, string> = {
@@ -20,6 +26,8 @@ export class Hud {
   readonly root: HTMLElement;
   private handlers: HudHandlers;
   tool: ToolId = "inspect";
+  laurelsOpen = false;
+  private coachId = "";
 
   constructor(root: HTMLElement, handlers: HudHandlers) {
     this.root = root;
@@ -52,6 +60,7 @@ export class Hud {
           <button data-speed="2">2×</button>
           <button data-speed="3">3×</button>
           <button id="btn-mute" title="Mute">♪</button>
+          <button id="btn-laurels" title="Laurels">Laurels</button>
           <button id="btn-save">Save</button>
           <button id="btn-menu">Menu</button>
         </div>
@@ -83,8 +92,12 @@ export class Hud {
           <li>Right-drag orbits. WASD pans. Scroll zooms. Paint avenues across water for bridges.</li>
           <li>Windmills make clean power. Docks need shore. The Beacon doubles trader dues.</li>
           <li>Fires consume a plot unless a live Fire Hall stands nearby. Press U on a surveyed home to raise it.</li>
+          <li>A primer teaches new mayors. Press <kbd>A</kbd> for laurels. Replay the primer from this sheet.</li>
         </ul>
+        <button type="button" class="text-btn" id="btn-replay-primer">Replay primer</button>
       </aside>
+      <aside class="coach" id="coach" hidden></aside>
+      <section class="laurels" id="laurels-panel" hidden></section>
     `;
     const bar = this.root.querySelector("#toolbar")!;
     for (const id of TOOL_ORDER) {
@@ -112,8 +125,10 @@ export class Hud {
       });
     });
     this.root.querySelector("#btn-mute")!.addEventListener("click", () => this.handlers.onMute());
+    this.root.querySelector("#btn-laurels")!.addEventListener("click", () => this.handlers.onToggleLaurels());
     this.root.querySelector("#btn-save")!.addEventListener("click", () => this.handlers.onSave());
     this.root.querySelector("#btn-menu")!.addEventListener("click", () => this.handlers.onMenu());
+    this.root.querySelector("#btn-replay-primer")!.addEventListener("click", () => this.handlers.onReplayTutorial());
     const tax = this.root.querySelector("#tax") as HTMLInputElement;
     tax.addEventListener("input", () => {
       const n = Number(tax.value) / 100;
@@ -179,6 +194,8 @@ export class Hud {
       if (fireStat) fireStat.textContent = String(stats.fires);
     }
     this.renderCharter(city);
+    this.renderCoach(city);
+    if (this.laurelsOpen) this.renderLaurels(city);
   }
 
   private renderCharter(city: City): void {
@@ -248,6 +265,94 @@ export class Hud {
     if (!sheet) return false;
     sheet.hidden = !sheet.hidden;
     return !sheet.hidden;
+  }
+
+  toggleLaurels(city: City): boolean {
+    this.laurelsOpen = !this.laurelsOpen;
+    const panel = this.root.querySelector("#laurels-panel") as HTMLElement;
+    panel.hidden = !this.laurelsOpen;
+    if (this.laurelsOpen) this.renderLaurels(city);
+    return this.laurelsOpen;
+  }
+
+  private pulseTool(id: ToolId | undefined): void {
+    this.root.querySelectorAll(".tool").forEach((b) => b.classList.remove("pulse"));
+    if (!id) return;
+    this.root.querySelector(`.tool[data-tool="${id}"]`)?.classList.add("pulse");
+  }
+
+  private renderCoach(city: City): void {
+    const host = this.root.querySelector("#coach") as HTMLElement | null;
+    if (!host) return;
+    const step = tutorialStep(city);
+    if (!step) {
+      host.hidden = true;
+      host.innerHTML = "";
+      this.coachId = "";
+      this.pulseTool(undefined);
+      this.root.querySelector("#btn-laurels")?.classList.remove("pulse");
+      this.root.querySelector("#tax")?.classList.remove("pulse");
+      return;
+    }
+    host.hidden = false;
+    this.pulseTool(step.tool);
+    this.root.querySelector("#btn-laurels")?.classList.toggle("pulse", step.id === "laurels");
+    this.root.querySelector("#tax")?.classList.toggle("pulse", step.id === "meters");
+    const waiting = Boolean(step.wait && !step.wait(city));
+    const total = TUTORIAL.length;
+    const index = city.tutorialIndex + 1;
+    if (this.coachId !== step.id) {
+      this.coachId = step.id;
+      host.innerHTML = `
+        <header>
+          <span>Primer ${index} / ${total}</span>
+          <button type="button" class="text-btn" data-skip>Skip</button>
+        </header>
+        <h3>${step.title}</h3>
+        <p>${step.body}</p>
+        <footer>
+          <em data-wait></em>
+          <button type="button" class="primary" data-next>Continue</button>
+        </footer>
+      `;
+      host.querySelector("[data-skip]")!.addEventListener("click", () => this.handlers.onSkipTutorial());
+      host.querySelector("[data-next]")!.addEventListener("click", () => this.handlers.onTutorialContinue());
+    }
+    const waitEl = host.querySelector("[data-wait]") as HTMLElement | null;
+    const nextBtn = host.querySelector("[data-next]") as HTMLButtonElement | null;
+    if (waitEl) waitEl.textContent = waiting ? "Waiting — do this in the world." : "Ready when you are.";
+    if (nextBtn) nextBtn.disabled = waiting;
+    const header = host.querySelector("header span");
+    if (header) header.textContent = `Primer ${index} / ${total}`;
+  }
+
+  private renderLaurels(city: City): void {
+    const panel = this.root.querySelector("#laurels-panel") as HTMLElement | null;
+    if (!panel) return;
+    const earned = city.completedAchievements.size;
+    const total = ACHIEVEMENTS.length;
+    panel.innerHTML = `
+      <header>
+        <h3>Laurels</h3>
+        <span>${earned} / ${total}</span>
+        <button type="button" class="text-btn" data-close>Close</button>
+      </header>
+      ${LAUREL_CATEGORIES.map((cat) => {
+        const items = ACHIEVEMENTS.filter((a) => a.category === cat.id);
+        return `
+          <h4>${cat.title}</h4>
+          <ul>
+            ${items
+              .map((a) => {
+                const on = city.completedAchievements.has(a.id);
+                return `<li class="${on ? "on" : "off"}"><strong>${a.title}</strong><span>${a.detail}</span></li>`;
+              })
+              .join("")}
+          </ul>
+        `;
+      }).join("")}
+    `;
+    panel.querySelector("[data-close]")?.addEventListener("click", () => this.handlers.onToggleLaurels());
   }
 
   lockTools(pop: number): void {
