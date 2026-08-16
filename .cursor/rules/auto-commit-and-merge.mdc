@@ -1,0 +1,25 @@
+---
+description: Automatically commit, push, open a PR, and merge into main when Aetheris work is finished
+alwaysApply: true
+---
+
+# Auto commit and merge
+
+The owner of this repo does not merge by hand. When you finish a unit of work that changed the repo, **commit, push, open or update a PR, and merge it into `main` before you end the turn**. Do this every time. Do not wait to be asked. This file is standing permission to merge.
+
+## Steps
+
+1. `git add` the files you changed (never secrets, `.env`, or generated noise).
+2. `git commit` with a descriptive message. One commit per logical change. Do not amend or force-push unless the user asks.
+3. `git push -u origin <branch>`.
+4. Create a PR for the branch if none exists, or update the existing PR. Base branch is `main`.
+5. If the PR is a draft, mark it ready for review.
+6. **Merge into `main` immediately** with a merge commit (`gh pr merge --merge` or the PR tool’s merge action). Match existing history (PR #2 used a merge commit).
+
+## If merge is blocked
+
+If CI is red or GitHub reports not mergeable, fix the issue, push, and merge. Do not leave a finished feature sitting unmerged.
+
+## Skip
+
+Skip this flow only when the turn had no repo changes (question-only).
