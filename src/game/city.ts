@@ -489,7 +489,8 @@ export class City {
     }
 
     const population = rHave;
-    const unemployment = population === 0 ? 0 : Math.max(0, 1 - employed / Math.max(1, population));
+    const employedClamped = Math.min(employed, population);
+    const unemployment = population === 0 ? 0 : Math.max(0, 1 - employedClamped / Math.max(1, population));
     const demandR = Math.max(0, Math.min(1, (jobs - population) / 40 + 0.25));
     const demandC = Math.max(0, Math.min(1, cJobs / 40 + population / 200));
     const demandI = Math.max(0, Math.min(1, iJobs / 40 + population / 260));
@@ -498,7 +499,7 @@ export class City {
       money: this.money,
       population,
       jobs,
-      employed,
+      employed: employedClamped,
       unemployment,
       happiness: happyTiles ? happinessAcc / happyTiles : 58,
       powerSupply,

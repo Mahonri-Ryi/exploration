@@ -92,6 +92,10 @@ if (built.stats.powerSupply <= 0 || built.stats.waterSupply <= 0) {
   throw new Error("Utilities did not register supply");
 }
 
+await page.waitForFunction(() => window.__AETHERIS__.stats().population > 0);
+await new Promise((r) => setTimeout(r, 400));
+await page.screenshot({ path: "/tmp/aetheris-smoke.png", fullPage: true });
+
 const waterBlocked = await page.evaluate(() => {
   const city = window.__AETHERIS__.city();
   const water = city.tiles.find((t) => t.water);
@@ -105,12 +109,10 @@ if (!demolished) throw new Error("Demolish failed");
 const after = await page.evaluate(() => window.__AETHERIS__.stats());
 if (after.money <= moneyBefore) throw new Error("Demolish did not refund");
 
-await page.screenshot({ path: "/tmp/aetheris-smoke.png", fullPage: true });
-
 const fatal = errors.filter(
   (e) => !/GPU stall|swiftshader|deprecated|favicon|404 .*favicon/i.test(e),
 );
 if (fatal.length) throw new Error(`Page errors: ${fatal.join(" | ")}`);
 
-console.log(JSON.stringify({ ok: true, stats: after, home: built.home, origin: built.origin }, null, 2));
+console.log(JSON.stringify({ ok: true, stats: built.stats, afterDemolish: after, home: built.home, origin: built.origin }, null, 2));
 await browser.close();
