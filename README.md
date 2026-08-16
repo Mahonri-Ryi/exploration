@@ -57,9 +57,31 @@ npm run preview
 
 Then open **http://localhost:4173**.
 
-### Play on GitHub Pages (optional)
+### Play online for free (no local install)
 
-The `Deploy Aetheris` workflow publishes the `dist` folder on every push to `main` once GitHub Pages is enabled for this repository (Settings → Pages → GitHub Actions). After that, the live URL is the Pages URL GitHub shows for the repo.
+Aetheris is a static web game. Anyone can play it in a browser once it is published. **GitHub Pages is free** for public repositories, and this repo already has a deploy workflow (`.github/workflows/pages.yml`).
+
+**Turn it on (one-time):**
+
+1. Merge the Aetheris branch into `main` (the workflow only runs on `main`).
+2. Make the repository **public** (GitHub Free includes Pages for public repos; private Pages needs GitHub Pro). In the repo: **Settings → General → Danger Zone → Change repository visibility → Public**.
+3. Enable Pages: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+4. Push (or re-run the **Deploy Aetheris** workflow). When it is green, GitHub shows the site URL on the Pages settings page.
+
+The usual URL is:
+
+**https://mahonri-ryi.github.io/exploration/**
+
+Open that link, wait for the title screen, then click **Found City**. No Node, no `npm`, no clone.
+
+**Other free hosts** (work even if the repo stays private):
+
+- [Cloudflare Pages](https://pages.cloudflare.com/) — connect this GitHub repo, build command `npm run build`, output folder `dist`.
+- [Netlify](https://www.netlify.com/) — same build settings, or drag-and-drop a `dist` folder.
+- [itch.io](https://itch.io/) — create an HTML5 project and upload a zip of `dist`.
+
+Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub Pages project sites) as well as at a domain root.
+
 
 ## How to play
 
