@@ -23,14 +23,14 @@ export const ColorGradeShader = {
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
       vec3 col = c.rgb;
-      col = pow(max(col, vec3(0.0)), vec3(0.96));
-      col *= vec3(1.04, 1.0, 0.96);
-      col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), night * 0.08);
+      col = pow(max(col, vec3(0.0)), vec3(0.94));
+      col *= vec3(1.06, 1.02, 0.98);
+      col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), night * 0.06);
       vec2 p = vUv * 2.0 - 1.0;
-      float vig = 1.0 - dot(p, p) * 0.18;
+      float vig = 1.0 - dot(p, p) * 0.12;
       col *= vig;
       float n = fract(sin(dot(vUv * 1.7 + time, vec2(12.9898, 78.233))) * 43758.5453);
-      col += (n - 0.5) * 0.018;
+      col += (n - 0.5) * 0.012;
       gl_FragColor = vec4(col, c.a);
     }
   `,

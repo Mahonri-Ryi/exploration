@@ -140,10 +140,10 @@ export class World {
     this.sky = new Sky();
     this.sky.scale.setScalar(420);
     const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
-    skyU.turbidity.value = 3.2;
-    skyU.rayleigh.value = 1.15;
-    skyU.mieCoefficient.value = 0.005;
-    skyU.mieDirectionalG.value = 0.88;
+    skyU.turbidity.value = 1.6;
+    skyU.rayleigh.value = 1.45;
+    skyU.mieCoefficient.value = 0.004;
+    skyU.mieDirectionalG.value = 0.9;
     this.scene.add(this.sky);
 
     this.probeSky = new Sky();
@@ -1032,8 +1032,8 @@ export class World {
     const sunDir = sunPos.clone().normalize();
     const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
     skyU.sunPosition.value.copy(skySun);
-    skyU.turbidity.value = 2.6 + night * 8;
-    skyU.rayleigh.value = 1.25 - night * 0.85;
+    skyU.turbidity.value = 1.5 + night * 3.2;
+    skyU.rayleigh.value = 1.45 - night * 0.55;
     const waterMat = this.water.material as THREE.ShaderMaterial;
     if (waterMat.uniforms?.sunDir) waterMat.uniforms.sunDir.value.copy(sunDir);
     if (waterMat.uniforms?.skyReflect) {
@@ -1051,7 +1051,7 @@ export class World {
     fog.color.set(night > 0.55 ? 0x101820 : elev < 0.12 ? 0xc4a888 : 0xb9cce0);
     fog.density = night > 0.5 ? 0.007 : 0.0042;
     this.scene.background = fog.color;
-    this.renderer.toneMappingExposure = 0.78 + (1 - night) * 0.38;
+    this.renderer.toneMappingExposure = 0.95 + (1 - night) * 0.32;
     this.bloom.strength = preferLiteGpu() ? 0.08 + night * 0.18 : 0.16 + night * 0.28;
     if (this.grade.uniforms.time) this.grade.uniforms.time.value = this.waterTime;
     if (this.grade.uniforms.night) this.grade.uniforms.night.value = night;
