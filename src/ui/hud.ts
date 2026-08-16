@@ -69,13 +69,13 @@ export class Hud {
           <button id="btn-menu">Menu</button>
         </div>
       </header>
-      <aside class="toolbar" id="toolbar"></aside>
       <section class="inspect" id="inspect-panel" hidden></section>
       <section class="charter" id="charter">
         <h3>Charter</h3>
         <ol id="charter-list"></ol>
         <canvas id="minimap" width="40" height="40" aria-label="Minimap"></canvas>
       </section>
+      <div class="play-chrome">
       <footer class="bottom">
         <div class="mobile-dock">
           <button type="button" id="btn-look" title="Drag to orbit">Look</button>
@@ -93,6 +93,8 @@ export class Hud {
           <b id="tax-val">9%</b>
         </label>
       </footer>
+      <aside class="toolbar" id="toolbar"></aside>
+      </div>
       <aside class="help" id="help-sheet" hidden>
         <h3>Field notes</h3>
         <ul>
@@ -148,6 +150,23 @@ export class Hud {
       (this.root.querySelector("#tax-val") as HTMLElement).textContent = `${tax.value}%`;
       this.handlers.onTax(n);
     });
+    this.bindChromeHeight();
+  }
+
+  private bindChromeHeight(): void {
+    const chrome = this.root.querySelector(".play-chrome") as HTMLElement | null;
+    if (!chrome) return;
+    const apply = () => {
+      const box = chrome.getBoundingClientRect().height;
+      const bar = this.root.querySelector(".bottom") as HTMLElement | null;
+      const tools = this.root.querySelector(".toolbar") as HTMLElement | null;
+      const sum =
+        (bar?.getBoundingClientRect().height ?? 0) + (tools?.getBoundingClientRect().height ?? 0);
+      const h = box > 1 ? box : sum;
+      if (h > 0) this.root.style.setProperty("--chrome-h", `${Math.ceil(h)}px`);
+    };
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(apply).observe(chrome);
+    apply();
   }
 
   setTool(id: ToolId): void {
@@ -186,8 +205,18 @@ export class Hud {
     this.charterOpen = !this.charterOpen;
     this.root.querySelector("#charter")?.classList.toggle("open", this.charterOpen);
     this.root.querySelector("#btn-charter")?.classList.toggle("on", this.charterOpen);
-    if (this.charterOpen) this.hideInspect();
+    if (this.charterOpen) {
+      this.hideInspect();
+      this.setHelpOpen(false);
+    }
     return this.charterOpen;
+  }
+
+  private setHelpOpen(open: boolean): void {
+    const sheet = this.root.querySelector("#help-sheet") as HTMLElement | null;
+    if (!sheet) return;
+    sheet.hidden = !open;
+    this.root.querySelector("#btn-notes")?.classList.toggle("on", open);
   }
 
   setSpeed(n: number): void {
@@ -303,9 +332,14 @@ export class Hud {
   toggleHelp(): boolean {
     const sheet = this.root.querySelector("#help-sheet") as HTMLElement | null;
     if (!sheet) return false;
-    sheet.hidden = !sheet.hidden;
-    this.root.querySelector("#btn-notes")?.classList.toggle("on", !sheet.hidden);
-    return !sheet.hidden;
+    const open = sheet.hidden;
+    this.setHelpOpen(open);
+    if (open && this.charterOpen) {
+      this.charterOpen = false;
+      this.root.querySelector("#charter")?.classList.remove("open");
+      this.root.querySelector("#btn-charter")?.classList.remove("on");
+    }
+    return open;
   }
 
   toggleLaurels(city: City): boolean {

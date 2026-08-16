@@ -190,6 +190,7 @@ button, input { font-family: inherit; touch-action: manipulation; }
   display: flex; align-items: center; gap: 16px;
   padding: 10px 14px; background: var(--glass); border: 1px solid var(--line);
 }
+.play-chrome { display: contents; }
 .demand { display: flex; gap: 10px; }
 .demand label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
 .demand i {
@@ -261,21 +262,30 @@ button, input { font-family: inherit; touch-action: manipulation; }
   .stat { min-width: 72px; padding: 4px 8px; flex-shrink: 0; }
   .stat b { font-size: 13px; }
   .clock { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-  .clock button { padding: 8px 8px; min-height: 40px; font-size: 11px; }
+  .clock button { padding: 8px 10px; min-height: 44px; min-width: 44px; font-size: 12px; }
 
+  .play-chrome {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 12;
+    background: linear-gradient(0deg, rgba(8,10,14,0.96), rgba(8,10,14,0.82));
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
   .toolbar {
-    left: 0; right: 0; top: auto;
-    bottom: 0; width: auto; height: auto;
+    position: relative;
+    left: auto; right: auto; top: auto; bottom: auto;
+    width: 100%; height: auto;
     flex-direction: row;
     overflow-x: auto;
     overflow-y: hidden;
     gap: 4px;
     padding: 6px 8px;
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
     padding-left: max(8px, env(safe-area-inset-left));
     padding-right: max(8px, env(safe-area-inset-right));
-    background: linear-gradient(0deg, rgba(8,10,14,0.94), rgba(8,10,14,0.78));
-    border-top: 1px solid var(--line);
+    background: transparent;
   }
   .tool {
     flex: 0 0 auto;
@@ -291,53 +301,65 @@ button, input { font-family: inherit; touch-action: manipulation; }
   .tool img { width: 36px; height: 36px; grid-row: auto; }
   .tool em { font-size: 10px; line-height: 1.1; }
   .tool small { font-size: 9px; }
+  .tool.locked { display: none; }
 
   .bottom {
-    left: 0; right: 0;
-    bottom: calc(76px + env(safe-area-inset-bottom));
-    flex-wrap: wrap;
+    position: relative;
+    left: auto; right: auto; bottom: auto;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     gap: 8px;
     padding: 8px 10px;
     padding-left: max(10px, env(safe-area-inset-left));
     padding-right: max(10px, env(safe-area-inset-right));
+    background: transparent;
+    border: none;
   }
-  .mobile-dock { display: flex; gap: 6px; }
+  .mobile-dock { display: flex; gap: 6px; flex-shrink: 0; }
+  .mobile-dock button { min-width: 64px; min-height: 44px; }
   .hint { display: none; }
+  .demand, .tax { flex-shrink: 0; }
   .tax input { width: 72px; }
 
   .charter {
     display: none;
     left: 8px; right: 8px; width: auto;
     top: auto;
-    bottom: calc(132px + env(safe-area-inset-bottom));
-    max-height: 38vh;
-    z-index: 8;
+    bottom: calc(var(--chrome-h, 160px) + 8px);
+    max-height: 34vh;
+    z-index: 13;
   }
   .charter.open { display: block; }
 
   .inspect {
     left: 8px; right: 8px; width: auto;
     top: auto;
-    bottom: calc(132px + env(safe-area-inset-bottom));
-    max-height: 40vh;
+    bottom: calc(var(--chrome-h, 160px) + 8px);
+    max-height: 36vh;
     overflow: auto;
-    z-index: 9;
+    z-index: 14;
   }
   .inspect-head .text-btn { min-height: 40px; padding: 8px 4px; }
 
   .coach {
     left: 8px; right: 8px; width: auto;
-    bottom: calc(132px + env(safe-area-inset-bottom));
-    z-index: 10;
+    bottom: calc(var(--chrome-h, 160px) + 8px);
+    max-height: 28vh;
+    overflow: auto;
+    z-index: 15;
+    padding: 10px 12px 10px;
   }
+  .coach h3 { font-size: 14px; }
+  .coach p { font-size: 12px; }
 
   .help, .laurels {
     left: 8px; right: 8px; width: auto;
     transform: none;
     top: calc(72px + env(safe-area-inset-top));
     bottom: auto;
-    max-height: calc(100dvh - 220px);
-    z-index: 11;
+    max-height: calc(100dvh - 240px);
+    z-index: 16;
   }
 
   #toasts {
@@ -348,9 +370,8 @@ button, input { font-family: inherit; touch-action: manipulation; }
 
 @media (max-width: 900px) and (orientation: landscape) {
   .stat-row { order: 0; flex: 1 1 auto; }
-  .toolbar { padding: 4px 8px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+  .toolbar { padding: 4px 8px; }
   .tool { width: 60px; min-height: 56px; }
-  .bottom { bottom: calc(64px + env(safe-area-inset-bottom)); }
-  .charter, .inspect, .coach { bottom: calc(118px + env(safe-area-inset-bottom)); max-height: 46vh; }
+  .coach, .inspect, .charter { max-height: 42vh; }
 }
 
