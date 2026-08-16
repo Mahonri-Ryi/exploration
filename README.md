@@ -1,10 +1,20 @@
 # Aetheris
 
-A cinematic 3D city builder you can play in the browser. Found a riverside metropolis, lay avenues, raise cottages and glass towers, keep the lights and water flowing, and watch the skyline change from golden hour to night.
+A cinematic 3D city builder. The **graphics target is Unreal Engine 5** (Lumen, virtual shadows, sky atmosphere). The browser build is a prototype only.
 
-## How to access the game
+## Play in Unreal Engine 5 (native)
 
-Aetheris runs in a web browser. You do not install a desktop app — you start a local server, then open the printed URL.
+This is how you get the lighting and atmosphere the web build cannot do.
+
+1. Install [Unreal Engine 5.5](https://www.unrealengine.com/download).
+2. Open `Unreal/Aetheris/Aetheris.uproject` and let it compile the C++ modules.
+3. Press **Play**.
+
+WASD pans, middle-mouse orbits, **1–7** pick tools, left click places, right click razes. Full notes: [`Unreal/Aetheris/README.md`](Unreal/Aetheris/README.md).
+
+## Browser prototype (optional)
+
+The Three.js sketch still runs in a tab if you want a quick look without the editor. It will never look like UE5.
 
 ### 1. Install Node.js
 
@@ -103,9 +113,10 @@ Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub
 
 ## Project layout
 
-- `src/game` — catalog, simulation, save data
-- `src/world` — Three.js terrain, buildings, lighting, camera
-- `src/ui` — cinematic HUD
+- `Unreal/Aetheris` — native UE5 game (Lumen, city sim, placement)
+- `src/game` — browser catalog and simulation
+- `src/world` — Three.js prototype renderer
+- `src/ui` — browser HUD
 - `src/audio` — Web Audio playback
 - `public/assets` — generated branding, icons, textures, and sound
 - `scripts/generate-audio.py` — rebuilds the OGG library
@@ -114,7 +125,8 @@ Vite is already set to `base: "./"`, so the game works in a subdirectory (GitHub
 
 ```bash
 npm test
-npm run smoke   # live Chrome playtest — each feature is a named in-game check
+npm run unreal:check   # native project files and Lumen config
+npm run smoke          # live Chrome playtest of the browser prototype
 ```
 
 Agents must also playtest every new feature individually in the running game (`npm run dev` → http://localhost:5173), not only with unit tests.
