@@ -3,3 +3,11 @@ dist
 .DS_Store
 *.log
 .vite
+Unreal/Aetheris/Binaries/
+Unreal/Aetheris/Intermediate/
+Unreal/Aetheris/DerivedDataCache/
+Unreal/Aetheris/Saved/
+Unreal/Aetheris/.vs/
+Unreal/Aetheris/*.sln
+Unreal/Aetheris/*.vcxproj*
+Unreal/Aetheris/*.xcodeproj

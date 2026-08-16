@@ -5,11 +5,11 @@ alwaysApply: true
 
 # Playtest features in the live game
 
-Every feature you implement must be tested **individually in the actual running game** before you call it done. Unit tests and code review are not enough on their own.
+Every **browser** feature you implement must be tested **individually in the actual running web game** before you call it done. Unit tests and code review are not enough on their own. Native Unreal work is playtested in the UE5 editor (`Unreal/Aetheris`); this environment cannot launch the editor, so run `npm run unreal:check` and keep the Play steps in `Unreal/Aetheris/README.md` accurate.
 
 ## Required
 
-1. Start the game (`npm run dev` → http://localhost:5173) and wait for the title screen.
+1. Start the web prototype (`npm run dev` → http://localhost:5173) and wait for the title screen.
 2. Found a city (or Continue) and exercise **that feature by itself** in the live UI — click the real tool, place or toggle it, and watch the HUD, toasts, and world.
 3. Confirm the intended behavior: placement or control works, simulation/HUD update, and nothing else broke.
 4. If the feature has several parts (place, operate, upgrade, raze, save), test each part separately.

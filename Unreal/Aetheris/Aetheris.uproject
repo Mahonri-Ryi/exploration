@@ -1,0 +1,20 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.5",
+  "Category": "Games",
+  "Description": "Aetheris — native Unreal Engine 5 city builder (Lumen, VSM, sky atmosphere).",
+  "Modules": [
+    {
+      "Name": "Aetheris",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "AdditionalDependencies": ["Engine"]
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "ProceduralMeshComponent",
+      "Enabled": true
+    }
+  ]
+}
