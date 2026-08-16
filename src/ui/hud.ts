@@ -1,0 +1,205 @@
+import { CATALOG_BY_ID, TOOL_ORDER, type ToolId } from "../game/catalog";
+import { MONTHS, type City, type CityStats } from "../game/city";
+
+export interface HudHandlers {
+  onTool: (id: ToolId) => void;
+  onSpeed: (n: number) => void;
+  onTax: (n: number) => void;
+  onMute: () => void;
+  onSave: () => void;
+  onMenu: () => void;
+}
+
+const ICONS: Record<string, string> = {
+  inspect: "icon-inspect.png",
+  bulldoze: "icon-bulldoze.png",
+};
+
+export class Hud {
+  readonly root: HTMLElement;
+  private handlers: HudHandlers;
+  tool: ToolId = "inspect";
+
+  constructor(root: HTMLElement, handlers: HudHandlers) {
+    this.root = root;
+    this.handlers = handlers;
+    this.renderChrome();
+  }
+
+  private renderChrome(): void {
+    this.root.innerHTML = `
+      <header class="topbar">
+        <div class="brand">
+          <img src="./assets/branding/favicon-64.png" alt="" />
+          <div>
+            <div class="city-name" id="city-name">Aetheris</div>
+            <div class="date" id="date-line">Year 1</div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="stat" title="Treasury"><span>Treasury</span><b id="stat-money">$0</b></div>
+          <div class="stat" title="Population"><span>Souls</span><b id="stat-pop">0</b></div>
+          <div class="stat" title="Happiness"><span>Spirit</span><b id="stat-happy">—</b></div>
+          <div class="stat" title="Jobs"><span>Labor</span><b id="stat-jobs">0</b></div>
+          <div class="stat" title="Power"><span>Power</span><b id="stat-power">0/0</b></div>
+          <div class="stat" title="Water"><span>Water</span><b id="stat-water">0/0</b></div>
+        </div>
+        <div class="clock">
+          <button data-speed="0">❚❚</button>
+          <button data-speed="1" class="on">1×</button>
+          <button data-speed="2">2×</button>
+          <button data-speed="3">3×</button>
+          <button id="btn-mute" title="Mute">♪</button>
+          <button id="btn-save">Save</button>
+          <button id="btn-menu">Menu</button>
+        </div>
+      </header>
+      <aside class="toolbar" id="toolbar"></aside>
+      <section class="inspect" id="inspect-panel" hidden></section>
+      <footer class="bottom">
+        <div class="demand">
+          <label>R <i id="bar-r"></i></label>
+          <label>C <i id="bar-c"></i></label>
+          <label>I <i id="bar-i"></i></label>
+        </div>
+        <div class="hint" id="hint">Select a tool. Right-drag to orbit. Scroll to zoom. WASD to pan.</div>
+        <label class="tax">Levy
+          <input id="tax" type="range" min="4" max="16" value="9" />
+          <b id="tax-val">9%</b>
+        </label>
+      </footer>
+    `;
+    const bar = this.root.querySelector("#toolbar")!;
+    for (const id of TOOL_ORDER) {
+      const def = CATALOG_BY_ID[id];
+      const icon = def ? def.icon : ICONS[id];
+      const name = def ? def.name : id === "inspect" ? "Survey" : "Raze";
+      const cost = def ? `$${def.cost.toLocaleString()}` : "";
+      const btn = document.createElement("button");
+      btn.className = "tool";
+      btn.dataset.tool = id;
+      btn.title = def ? `${def.name} — ${def.description}` : name;
+      btn.innerHTML = `
+        <img src="./assets/icons/${icon}" alt="${name}" />
+        <em>${name}</em>
+        <small>${cost}</small>
+      `;
+      btn.addEventListener("click", () => this.handlers.onTool(id));
+      bar.appendChild(btn);
+    }
+    this.root.querySelectorAll("[data-speed]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const n = Number((el as HTMLElement).dataset.speed);
+        this.handlers.onSpeed(n);
+        this.root.querySelectorAll("[data-speed]").forEach((b) => b.classList.toggle("on", b === el));
+      });
+    });
+    this.root.querySelector("#btn-mute")!.addEventListener("click", () => this.handlers.onMute());
+    this.root.querySelector("#btn-save")!.addEventListener("click", () => this.handlers.onSave());
+    this.root.querySelector("#btn-menu")!.addEventListener("click", () => this.handlers.onMenu());
+    const tax = this.root.querySelector("#tax") as HTMLInputElement;
+    tax.addEventListener("input", () => {
+      const n = Number(tax.value) / 100;
+      (this.root.querySelector("#tax-val") as HTMLElement).textContent = `${tax.value}%`;
+      this.handlers.onTax(n);
+    });
+  }
+
+  setTool(id: ToolId): void {
+    this.tool = id;
+    this.root.querySelectorAll(".tool").forEach((b) => {
+      b.classList.toggle("on", (b as HTMLElement).dataset.tool === id);
+    });
+    const def = CATALOG_BY_ID[id];
+    const hint = this.root.querySelector("#hint")!;
+    if (id === "inspect") hint.textContent = "Survey a district to read its fortunes.";
+    else if (id === "bulldoze") hint.textContent = "Raze a structure. The treasury recovers 40%.";
+    else if (def) hint.textContent = `${def.name}: ${def.description}`;
+  }
+
+  setSpeed(n: number): void {
+    this.root.querySelectorAll("[data-speed]").forEach((b) => {
+      b.classList.toggle("on", Number((b as HTMLElement).dataset.speed) === n);
+    });
+  }
+
+  setMuted(muted: boolean): void {
+    const btn = this.root.querySelector("#btn-mute") as HTMLButtonElement;
+    btn.textContent = muted ? "🔇" : "♪";
+  }
+
+  update(city: City, stats: CityStats): void {
+    (this.root.querySelector("#city-name") as HTMLElement).textContent = city.name;
+    (this.root.querySelector("#date-line") as HTMLElement).textContent =
+      `${MONTHS[stats.month - 1]} ${stats.day}, Year ${stats.year}  ·  ${String(stats.hour).padStart(2, "0")}:00`;
+    (this.root.querySelector("#stat-money") as HTMLElement).textContent = `$${Math.floor(stats.money).toLocaleString()}`;
+    (this.root.querySelector("#stat-pop") as HTMLElement).textContent = Math.floor(stats.population).toLocaleString();
+    (this.root.querySelector("#stat-happy") as HTMLElement).textContent = `${Math.round(stats.happiness)}%`;
+    (this.root.querySelector("#stat-jobs") as HTMLElement).textContent =
+      `${Math.floor(stats.employed)}/${Math.floor(stats.jobs)}`;
+    (this.root.querySelector("#stat-power") as HTMLElement).textContent =
+      `${stats.powerDemand}/${stats.powerSupply}`;
+    (this.root.querySelector("#stat-water") as HTMLElement).textContent =
+      `${stats.waterDemand}/${stats.waterSupply}`;
+    (this.root.querySelector("#bar-r") as HTMLElement).style.width = `${stats.demandR * 100}%`;
+    (this.root.querySelector("#bar-c") as HTMLElement).style.width = `${stats.demandC * 100}%`;
+    (this.root.querySelector("#bar-i") as HTMLElement).style.width = `${stats.demandI * 100}%`;
+    const money = this.root.querySelector("#stat-money")!;
+    money.classList.toggle("bad", stats.money < 0);
+    const pwr = this.root.querySelector("#stat-power")!;
+    pwr.classList.toggle("bad", stats.powerDemand > stats.powerSupply);
+    const wtr = this.root.querySelector("#stat-water")!;
+    wtr.classList.toggle("bad", stats.waterDemand > stats.waterSupply);
+  }
+
+  inspect(city: City, x: number, y: number): void {
+    const panel = this.root.querySelector("#inspect-panel") as HTMLElement;
+    const tile = city.get(x, y);
+    if (!tile) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    const def = tile.buildingId ? city.def(tile.buildingId) : null;
+    const cov = city.coverageAt(x, y);
+    const access = city.hasRoadAccess(x, y);
+    panel.innerHTML = `
+      <h3>${def ? def.name : tile.water ? "River" : "Open land"}</h3>
+      <p>${def ? def.description : tile.water ? "Unbuildable watercourse." : "A plot awaiting a purpose."}</p>
+      <ul>
+        <li>Parcel ${x}, ${y}</li>
+        <li>Road ${access ? "connected" : "isolated"}</li>
+        <li>Power ${tile.powered ? "live" : "dark"} · Water ${tile.watered ? "flowing" : "dry"}</li>
+        ${def ? `<li>Residents ${tile.residents}/${def.residents || 0} · Workers ${tile.workers}/${def.jobs || 0}</li>` : ""}
+        <li>Park ${cov.park.toFixed(1)} · Watch ${cov.service.toFixed(1)} · Smoke ${cov.pollution.toFixed(1)}</li>
+      </ul>
+    `;
+  }
+
+  hideInspect(): void {
+    (this.root.querySelector("#inspect-panel") as HTMLElement).hidden = true;
+  }
+
+  lockTools(pop: number): void {
+    this.root.querySelectorAll(".tool").forEach((b) => {
+      const id = (b as HTMLElement).dataset.tool!;
+      const def = CATALOG_BY_ID[id];
+      const locked = Boolean(def && pop < def.unlockPop);
+      b.classList.toggle("locked", locked);
+      (b as HTMLButtonElement).disabled = locked;
+    });
+  }
+}
+
+export function toast(message: string): void {
+  const host = document.getElementById("toasts")!;
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = message;
+  host.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("in"));
+  setTimeout(() => {
+    el.classList.remove("in");
+    setTimeout(() => el.remove(), 400);
+  }, 3200);
+}
