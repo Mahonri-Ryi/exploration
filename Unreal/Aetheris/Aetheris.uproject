@@ -2,13 +2,15 @@
   "FileVersion": 3,
   "EngineAssociation": "5.8",
   "Category": "Games",
-  "Description": "Aetheris — native Unreal Engine 5.8 city builder (Lumen, VSM, sky atmosphere).",
+  "Description": "Aetheris native Unreal Engine 5.8 city builder.",
   "Modules": [
     {
       "Name": "Aetheris",
       "Type": "Runtime",
       "LoadingPhase": "Default",
-      "AdditionalDependencies": ["Engine"]
+      "AdditionalDependencies": [
+        "Engine"
+      ]
     }
   ],
   "Plugins": [
