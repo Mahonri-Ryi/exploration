@@ -10,11 +10,10 @@
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/PostProcessVolume.h"
-#include "Engine/SkyAtmosphere.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMesh.h"
-#include "Engine/VolumetricCloud.h"
 #include "Kismet/GameplayStatics.h"
+#include "UObject/UObjectGlobals.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "ProceduralMeshComponent.h"
@@ -104,8 +103,21 @@ void AAetherisWorld::SpawnAtmosphere()
 		}
 	}
 
-	World->SpawnActor<ASkyAtmosphere>(FVector::ZeroVector, FRotator::ZeroRotator, P);
-	World->SpawnActor<AVolumetricCloud>(FVector::ZeroVector, FRotator::ZeroRotator, P);
+	auto SpawnNamed = [&](const TCHAR* ClassPath)
+	{
+		if (UClass* Class = LoadClass<AActor>(nullptr, ClassPath))
+		{
+			const FVector Loc = FVector::ZeroVector;
+			const FRotator Rot = FRotator::ZeroRotator;
+			World->SpawnActor(Class, &Loc, &Rot, P);
+		}
+		else
+		{
+			UE_LOG(LogAetheris, Warning, TEXT("Could not load %s"), ClassPath);
+		}
+	};
+	SpawnNamed(TEXT("/Script/Engine.SkyAtmosphere"));
+	SpawnNamed(TEXT("/Script/Engine.VolumetricCloud"));
 
 	AExponentialHeightFog* Fog = World->SpawnActor<AExponentialHeightFog>(FVector(0.f, 0.f, 200.f), FRotator::ZeroRotator, P);
 	if (Fog)

@@ -8,7 +8,7 @@ The editor is not in the cloud agent environment. Play this on the machine where
 
 1. Install [Unreal Engine 5.8](https://www.unrealengine.com/download) plus Visual Studio 2022 with **Game development with C++**. 5.8 wants a current MSVC v143 toolset — if the first compile fails on the toolchain, install the latest VS 2022 C++ build tools and retry.
 2. Double-click `Unreal/Aetheris/Aetheris.uproject`. If Version Selector asks, pick **5.8**.
-3. If asked to rebuild modules, click **Yes**. First compile takes a few minutes.
+3. If asked to rebuild modules, click **Yes**. First compile takes a few minutes. Pull latest `main` first — 5.8 needs the cursor-trace and sky-atmosphere compile fixes.
 4. Press **Play**. GameMode spawns the vale on BeginPlay, so any empty level works. If the default Open World template map is missing, use **File → New Level → Empty Open World** (or Empty Level) and Play there.
 5. Optional: save that level as `Content/Maps/Vale` and set it as the editor startup map.
 
