@@ -78,7 +78,7 @@ for (const key of ["RotateLeft", "RotateRight", "ResetCamera", "RazeHotkey", "Ca
 }
 
 const world = readFileSync(join(root, "Source/Aetheris/AetherisWorld.cpp"), "utf8");
-for (const key of ["SkyAtmosphere", "VolumetricCloud", "ASkyLight", "APostProcessVolume", "TryPlaceAt", "UpdateHover", "bRazeMode", "RefreshRoadNeighbors"]) {
+for (const key of ["SkyAtmosphere", "VolumetricCloud", "ASkyLight", "APostProcessVolume", "TryPlaceAt", "UpdateHover", "bRazeMode", "RefreshRoadNeighbors", "MeshOwner"]) {
   if (!world.includes(key)) fails.push(`AetherisWorld.cpp missing ${key}`);
 }
 

@@ -68,7 +68,7 @@ protected:
 	void BuildLandscape();
 	void SpawnWildTrees();
 	AActor* SpawnBuilding(int32 X, int32 Y, const FBuildingDef& Def);
-	void AttachMesh(AActor* Owner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough = 0.7f, float Metal = 0.05f, FName TexName = NAME_None);
+	void AttachMesh(AActor* MeshOwner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough = 0.7f, float Metal = 0.05f, FName TexName = NAME_None);
 	float HeightAt(int32 X, int32 Y) const;
 	void RefreshRoadNeighbors(int32 X, int32 Y);
 
