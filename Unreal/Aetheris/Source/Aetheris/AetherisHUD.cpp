@@ -13,9 +13,9 @@ void AAetherisHUD::DrawBox(const FVector2D& P, const FVector2D& S, const FLinear
 	Canvas->DrawItem(Tile);
 }
 
-void AAetherisHUD::AddBox(FName Id, const FVector2D& P, const FVector2D& S, EBoxKind Kind)
+void AAetherisHUD::AddBox(FName Id, const FVector2D& P, const FVector2D& S, EAetherisHudBox Kind)
 {
-	FHitBox Box;
+	FAetherisHudBox Box;
 	Box.Id = Id;
 	Box.Min = P;
 	Box.Max = P + S;
@@ -23,11 +23,11 @@ void AAetherisHUD::AddBox(FName Id, const FVector2D& P, const FVector2D& S, EBox
 	Boxes.Add(Box);
 }
 
-bool AAetherisHUD::Hit(const FVector2D& Mouse, FName& OutId, EBoxKind& OutKind) const
+bool AAetherisHUD::Hit(const FVector2D& Mouse, FName& OutId, EAetherisHudBox& OutKind) const
 {
 	for (int32 I = Boxes.Num() - 1; I >= 0; --I)
 	{
-		const FHitBox& B = Boxes[I];
+		const FAetherisHudBox& B = Boxes[I];
 		if (Mouse.X >= B.Min.X && Mouse.X <= B.Max.X && Mouse.Y >= B.Min.Y && Mouse.Y <= B.Max.Y)
 		{
 			OutId = B.Id;
@@ -88,7 +88,7 @@ void AAetherisHUD::DrawChoice(const FVector2D& P, const FString& Label, const TA
 		const FVector2D Sz(88.f, 26.f);
 		DrawBox(Btn, Sz, bOn ? FLinearColor(0.72f, 0.55f, 0.18f, 0.95f) : FLinearColor(0.12f, 0.13f, 0.16f, 0.92f));
 		DrawLabel(Btn + FVector2D(10.f, 5.f), C.Value, FLinearColor::White);
-		AddBox(C.Key, Btn, Sz, EBoxKind::Setting);
+		AddBox(C.Key, Btn, Sz, EAetherisHudBox::Setting);
 		X += 94.f;
 	}
 }
@@ -103,8 +103,8 @@ void AAetherisHUD::DrawStepper(const FVector2D& P, const FString& Label, const F
 	DrawLabel(Down + FVector2D(12.f, 5.f), TEXT("-"), FLinearColor::White);
 	DrawLabel(Up + FVector2D(12.f, 5.f), TEXT("+"), FLinearColor::White);
 	DrawLabel(FVector2D(P.X + 258.f, P.Y), Value, FLinearColor(1.f, 0.93f, 0.74f));
-	AddBox(DownId, Down, FVector2D(36.f, 26.f), EBoxKind::Setting);
-	AddBox(UpId, Up, FVector2D(36.f, 26.f), EBoxKind::Setting);
+	AddBox(DownId, Down, FVector2D(36.f, 26.f), EAetherisHudBox::Setting);
+	AddBox(UpId, Up, FVector2D(36.f, 26.f), EAetherisHudBox::Setting);
 }
 
 void AAetherisHUD::DrawToggle(const FVector2D& P, const FString& Label, bool bOn, FName Id)
@@ -113,7 +113,7 @@ void AAetherisHUD::DrawToggle(const FVector2D& P, const FString& Label, bool bOn
 	const FVector2D Btn(P.X + 210.f, P.Y - 4.f);
 	DrawBox(Btn, FVector2D(88.f, 26.f), bOn ? FLinearColor(0.18f, 0.42f, 0.4f, 0.95f) : FLinearColor(0.12f, 0.13f, 0.16f, 0.92f));
 	DrawLabel(Btn + FVector2D(18.f, 5.f), bOn ? TEXT("On") : TEXT("Off"), FLinearColor::White);
-	AddBox(Id, Btn, FVector2D(88.f, 26.f), EBoxKind::Setting);
+	AddBox(Id, Btn, FVector2D(88.f, 26.f), EAetherisHudBox::Setting);
 }
 
 void AAetherisHUD::DrawSettings()
@@ -124,16 +124,16 @@ void AAetherisHUD::DrawSettings()
 	const float X = (Canvas->SizeX - W) * 0.5f;
 	const float Y = (Canvas->SizeY - H) * 0.5f - 10.f;
 	DrawBox(FVector2D(0.f, 0.f), FVector2D(Canvas->SizeX, Canvas->SizeY), FLinearColor(0.02f, 0.02f, 0.03f, 0.62f));
-	AddBox(TEXT("set_backdrop"), FVector2D(0.f, 0.f), FVector2D(Canvas->SizeX, Canvas->SizeY), EBoxKind::Setting);
+	AddBox(TEXT("set_backdrop"), FVector2D(0.f, 0.f), FVector2D(Canvas->SizeX, Canvas->SizeY), EAetherisHudBox::Setting);
 	DrawBox(FVector2D(X, Y), FVector2D(W, H), FLinearColor(0.06f, 0.07f, 0.09f, 0.96f));
-	AddBox(TEXT("set_panel"), FVector2D(X, Y), FVector2D(W, H), EBoxKind::Setting);
+	AddBox(TEXT("set_panel"), FVector2D(X, Y), FVector2D(W, H), EAetherisHudBox::Setting);
 	DrawLabel(FVector2D(X + 24.f, Y + 18.f), TEXT("SETTINGS"), FLinearColor(1.f, 0.93f, 0.74f));
 	DrawLabel(FVector2D(X + 24.f, Y + 40.f), TEXT("Esc or F10 closes  ·  click a key then press a new one to rebind"), FLinearColor(0.6f, 0.63f, 0.68f));
 
 	const FVector2D Close(X + W - 110.f, Y + 16.f);
 	DrawBox(Close, FVector2D(86.f, 28.f), FLinearColor(0.28f, 0.14f, 0.12f, 0.95f));
 	DrawLabel(Close + FVector2D(22.f, 6.f), TEXT("Close"), FLinearColor::White);
-	AddBox(TEXT("set_close"), Close, FVector2D(86.f, 28.f), EBoxKind::Setting);
+	AddBox(TEXT("set_close"), Close, FVector2D(86.f, 28.f), EAetherisHudBox::Setting);
 
 	const TPair<FName, FString> Tabs[] = {
 		{ TEXT("graphics"), TEXT("Graphics") },
@@ -148,7 +148,7 @@ void AAetherisHUD::DrawSettings()
 		const FVector2D P(TX, Y + 68.f);
 		DrawBox(P, FVector2D(120.f, 30.f), bOn ? FLinearColor(0.72f, 0.55f, 0.18f, 0.95f) : FLinearColor(0.11f, 0.12f, 0.15f, 0.95f));
 		DrawLabel(P + FVector2D(18.f, 7.f), Tab.Value, FLinearColor::White);
-		AddBox(FName(*FString::Printf(TEXT("tab_%s"), *Tab.Key.ToString())), P, FVector2D(120.f, 30.f), EBoxKind::Setting);
+		AddBox(FName(*FString::Printf(TEXT("tab_%s"), *Tab.Key.ToString())), P, FVector2D(120.f, 30.f), EAetherisHudBox::Setting);
 		TX += 128.f;
 	}
 
@@ -206,7 +206,7 @@ void AAetherisHUD::DrawSettings()
 			const bool bListen = ListeningBind == B.Id;
 			DrawBox(Btn, FVector2D(150.f, 24.f), bListen ? FLinearColor(0.72f, 0.55f, 0.18f, 0.95f) : FLinearColor(0.12f, 0.13f, 0.16f, 0.95f));
 			DrawLabel(Btn + FVector2D(8.f, 4.f), bListen ? TEXT("Press a key…") : B.Current.GetDisplayName().ToString(), FLinearColor::White);
-			AddBox(FName(*FString::Printf(TEXT("bind_%s"), *B.Id.ToString())), Btn, FVector2D(150.f, 24.f), EBoxKind::Setting);
+			AddBox(FName(*FString::Printf(TEXT("bind_%s"), *B.Id.ToString())), Btn, FVector2D(150.f, 24.f), EAetherisHudBox::Setting);
 		}
 	}
 	else
@@ -218,7 +218,7 @@ void AAetherisHUD::DrawSettings()
 		const FVector2D Reset(LX, RY);
 		DrawBox(Reset, FVector2D(200.f, 32.f), FLinearColor(0.32f, 0.16f, 0.12f, 0.95f));
 		DrawLabel(Reset + FVector2D(28.f, 8.f), TEXT("Reset all defaults"), FLinearColor::White);
-		AddBox(TEXT("reset_all"), Reset, FVector2D(200.f, 32.f), EBoxKind::Setting);
+		AddBox(TEXT("reset_all"), Reset, FVector2D(200.f, 32.f), EAetherisHudBox::Setting);
 		RY += 48.f;
 		DrawLabel(FVector2D(LX, RY), TEXT("Settings save to Saved/Config/AetherisUser.ini and apply immediately."), FLinearColor(0.55f, 0.58f, 0.62f));
 	}
@@ -326,7 +326,7 @@ void AAetherisHUD::DrawHUD()
 	const FVector2D SetBtn(Canvas->SizeX - 118.f, 12.f);
 	DrawBox(SetBtn, FVector2D(100.f, 32.f), bSettingsOpen ? FLinearColor(0.72f, 0.55f, 0.18f, 0.95f) : FLinearColor(0.14f, 0.15f, 0.18f, 0.92f));
 	DrawLabel(SetBtn + FVector2D(16.f, 8.f), TEXT("Settings"), FLinearColor::White);
-	AddBox(TEXT("set_open"), SetBtn, FVector2D(100.f, 32.f), EBoxKind::Setting);
+	AddBox(TEXT("set_open"), SetBtn, FVector2D(100.f, 32.f), EAetherisHudBox::Setting);
 
 	if (FAetherisSettings::Get().bShowFps)
 	{
@@ -347,7 +347,7 @@ void AAetherisHUD::DrawHUD()
 		const FVector2D Sz(86.f, 28.f);
 		DrawBox(P, Sz, bOn ? FLinearColor(0.72f, 0.55f, 0.18f, 0.95f) : FLinearColor(0.12f, 0.13f, 0.16f, 0.9f));
 		DrawLabel(P + FVector2D(10.f, 6.f), Cat.Label, FLinearColor::White);
-		AddBox(Cat.Id, P, Sz, EBoxKind::Category);
+		AddBox(Cat.Id, P, Sz, EAetherisHudBox::Category);
 		CX += 92.f;
 	}
 
@@ -367,7 +367,7 @@ void AAetherisHUD::DrawHUD()
 			DrawBox(P, Sz, bSel ? FLinearColor(0.18f, 0.42f, 0.4f, 0.95f) : FLinearColor(0.1f, 0.11f, 0.14f, 0.92f));
 			DrawLabel(P + FVector2D(10.f, 10.f), Label, FLinearColor(0.95f, 0.93f, 0.88f));
 			if (Cost > 0) DrawLabel(P + FVector2D(10.f, 34.f), FString::Printf(TEXT("$%d"), Cost), FLinearColor(0.82f, 0.7f, 0.32f));
-			AddBox(Tool, P, Sz, EBoxKind::Tool);
+			AddBox(Tool, P, Sz, EAetherisHudBox::Tool);
 			ToolX += 158.f;
 		}
 	}
@@ -383,7 +383,7 @@ void AAetherisHUD::DrawHUD()
 		if (PC->GetMousePosition(MX, MY))
 		{
 			FName Id;
-			EBoxKind Kind = EBoxKind::Category;
+			EAetherisHudBox Kind = EAetherisHudBox::Category;
 			const FName Next = Hit(FVector2D(MX, MY), Id, Kind) ? Id : NAME_None;
 			if (!Next.IsNone() && Next != Hovered && Next != TEXT("set_backdrop"))
 			{
@@ -402,16 +402,16 @@ bool AAetherisHUD::ConsumeClick()
 	float MX, MY;
 	if (!PC->GetMousePosition(MX, MY)) return bSettingsOpen;
 	FName Id;
-	EBoxKind Kind = EBoxKind::Category;
+	EAetherisHudBox Kind = EAetherisHudBox::Category;
 	if (!Hit(FVector2D(MX, MY), Id, Kind)) return bSettingsOpen;
-	if (Kind == EBoxKind::Setting)
+	if (Kind == EAetherisHudBox::Setting)
 	{
 		if (Id == TEXT("set_open")) ToggleSettings();
 		else HandleSetting(Id);
 		return true;
 	}
 	if (bSettingsOpen) return true;
-	if (Kind == EBoxKind::Category)
+	if (Kind == EAetherisHudBox::Category)
 	{
 		OpenCategory = Id;
 		if (Id == TEXT("raze")) Vale->SetTool(TEXT("bulldoze"));

@@ -12,6 +12,14 @@ The editor is not in the cloud agent environment. Play this on the machine where
 4. Press **Play**. GameMode spawns the vale on BeginPlay, so any empty level works. If the default Open World template map is missing, use **File → New Level → Empty Open World** (or Empty Level) and Play there.
 5. Optional: save that level as `Content/Maps/Vale` and set it as the editor startup map.
 
+### "Project files could not be generated"
+
+That popup is Unreal failing to create the Visual Studio files for this C++ project. It is not a missing game map.
+
+1. Install **Visual Studio 2022** with the **Game development with C++** workload, the latest **MSVC v143** toolset, and the **Windows 10/11 SDK**. UE 5.8 will not generate project files without that.
+2. Pull latest `main`, then open `Aetheris.uproject` again. If Version Selector asks, pick **5.8**. Prefer **More Options → convert in-place**, not **Open a copy**.
+3. To see the real error, run `Unreal/Aetheris/GenerateProjectFiles.bat` or open `%LOCALAPPDATA%\UnrealBuildTool\Log.txt`.
+
 ## Controls (Cities-style)
 
 | Input | Action |

@@ -5,6 +5,21 @@
 #include "InputCoreTypes.h"
 #include "AetherisHUD.generated.h"
 
+enum class EAetherisHudBox : uint8
+{
+	Category,
+	Tool,
+	Setting
+};
+
+struct FAetherisHudBox
+{
+	FName Id;
+	FVector2D Min;
+	FVector2D Max;
+	EAetherisHudBox Kind = EAetherisHudBox::Category;
+};
+
 UCLASS()
 class AETHERIS_API AAetherisHUD : public AHUD
 {
@@ -23,25 +38,15 @@ public:
 	FName OpenCategory = TEXT("roads");
 
 private:
-	enum class EBoxKind : uint8 { Category, Tool, Setting };
-
-	struct FHitBox
-	{
-		FName Id;
-		FVector2D Min;
-		FVector2D Max;
-		EBoxKind Kind = EBoxKind::Category;
-	};
-
-	TArray<FHitBox> Boxes;
+	TArray<FAetherisHudBox> Boxes;
 	FName Hovered;
 	FName SettingsTab = TEXT("graphics");
 	FName ListeningBind;
 	bool bSettingsOpen = false;
 
 	void DrawBox(const FVector2D& P, const FVector2D& S, const FLinearColor& Color);
-	void AddBox(FName Id, const FVector2D& P, const FVector2D& S, EBoxKind Kind);
-	bool Hit(const FVector2D& Mouse, FName& OutId, EBoxKind& OutKind) const;
+	void AddBox(FName Id, const FVector2D& P, const FVector2D& S, EAetherisHudBox Kind);
+	bool Hit(const FVector2D& Mouse, FName& OutId, EAetherisHudBox& OutKind) const;
 	void DrawLabel(const FVector2D& P, const FString& Text, const FLinearColor& Color);
 	void DrawSettings();
 	void DrawChoice(const FVector2D& P, const FString& Label, const TArray<TPair<FName, FString>>& Choices, FName Selected);

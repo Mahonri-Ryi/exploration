@@ -86,9 +86,9 @@ for (const key of ["ConsumeClick", "OpenCategory", "DrawSettings", "ToggleSettin
 }
 
 const target = readFileSync(join(root, "Source/Aetheris.Target.cs"), "utf8");
-if (!target.includes("Unreal5_8")) fails.push("Aetheris.Target.cs missing Unreal5_8");
+if (!target.includes("EngineIncludeOrderVersion.Latest")) fails.push("Aetheris.Target.cs missing Latest include order");
 const editorTarget = readFileSync(join(root, "Source/AetherisEditor.Target.cs"), "utf8");
-if (!editorTarget.includes("Unreal5_8")) fails.push("AetherisEditor.Target.cs missing Unreal5_8");
+if (!editorTarget.includes("EngineIncludeOrderVersion.Latest")) fails.push("AetherisEditor.Target.cs missing Latest include order");
 
 const assets = readFileSync(join(root, "Source/Aetheris/AetherisAssets.cpp"), "utf8");
 if (!assets.includes("USoundWaveProcedural")) fails.push("AetherisAssets.cpp missing USoundWaveProcedural");
