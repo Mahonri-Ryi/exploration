@@ -4,6 +4,7 @@
 
 class UTexture2D;
 class USoundWave;
+class USoundWaveProcedural;
 class UMaterialInstanceDynamic;
 
 class FAetherisAssets
@@ -11,6 +12,7 @@ class FAetherisAssets
 public:
 	static FAetherisAssets& Get();
 	void Load();
+	void Prime(FName Name);
 
 	UTexture2D* Tex(FName Name) const;
 	USoundWave* Sfx(FName Name) const;
@@ -21,8 +23,9 @@ public:
 private:
 	TMap<FName, TObjectPtr<UTexture2D>> Textures;
 	TMap<FName, TObjectPtr<USoundWave>> Sounds;
+	TMap<FName, TSharedRef<TArray<uint8>>> Pcm;
 	bool bLoaded = false;
 
 	UTexture2D* LoadTextureFile(const FString& Path);
-	USoundWave* LoadWavFile(const FString& Path);
+	USoundWave* LoadWavFile(FName Name, const FString& Path);
 };

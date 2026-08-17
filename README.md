@@ -6,8 +6,8 @@ A cinematic 3D city builder. The **graphics target is Unreal Engine 5** (Lumen, 
 
 This is the real game. The browser build is a sketch.
 
-1. Install [Unreal Engine 5.5](https://www.unrealengine.com/download) (the download you already started).
-2. Open `Unreal/Aetheris/Aetheris.uproject` and let it compile the C++ modules.
+1. Install [Unreal Engine 5.8](https://www.unrealengine.com/download) and Visual Studio 2022 with **Game development with C++** (5.8 needs a current MSVC v143 toolset).
+2. Open `Unreal/Aetheris/Aetheris.uproject` (associated with 5.8) and let it compile the C++ modules.
 3. Press **Play**. Textures and WAV SFX load from `Unreal/Aetheris/Content/Runtime` — no Content Browser import step.
 
 Cities-style camera: **WASD** / edge scroll pan, **Q/E** rotate, **RMB** orbit, **MMB** pan, wheel zoom, **R** reset. Bottom dock picks tools; click-drag paints roads or razes. **1–7** hotkeys, **X** raze, **Space** pause. Full notes: [`Unreal/Aetheris/README.md`](Unreal/Aetheris/README.md).

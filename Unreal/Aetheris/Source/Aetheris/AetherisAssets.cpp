@@ -8,6 +8,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Sound/SoundWave.h"
+#include "Sound/SoundWaveProcedural.h"
 
 FAetherisAssets& FAetherisAssets::Get()
 {
@@ -50,7 +51,7 @@ void FAetherisAssets::Load()
 	};
 	for (const TCHAR* Name : Waves)
 	{
-		if (USoundWave* S = LoadWavFile(AudDir / FString::Printf(TEXT("%s.wav"), Name)))
+		if (USoundWave* S = LoadWavFile(Name, AudDir / FString::Printf(TEXT("%s.wav"), Name)))
 		{
 			Sounds.Add(Name, S);
 		}
@@ -88,7 +89,16 @@ UTexture2D* FAetherisAssets::LoadTextureFile(const FString& Path)
 	return Tex2D;
 }
 
-USoundWave* FAetherisAssets::LoadWavFile(const FString& Path)
+void FAetherisAssets::Prime(FName Name)
+{
+	USoundWave* Wave = Sfx(Name);
+	const TSharedRef<TArray<uint8>>* Buf = Pcm.Find(Name);
+	USoundWaveProcedural* Proc = Cast<USoundWaveProcedural>(Wave);
+	if (!Proc || !Buf || (*Buf)->Num() == 0) return;
+	Proc->QueueAudio((*Buf)->GetData(), (*Buf)->Num());
+}
+
+USoundWave* FAetherisAssets::LoadWavFile(FName Name, const FString& Path)
 {
 	TArray<uint8> Raw;
 	if (!FFileHelper::LoadFileToArray(Raw, *Path) || Raw.Num() < 44)
@@ -102,16 +112,34 @@ USoundWave* FAetherisAssets::LoadWavFile(const FString& Path)
 		UE_LOG(LogAetheris, Warning, TEXT("Bad wav %s"), *Path);
 		return nullptr;
 	}
-	USoundWave* Wave = NewObject<USoundWave>(GetTransientPackage(), NAME_None, RF_Transient);
+
 	const int32 Channels = *Info.pChannels;
 	const int32 SampleRate = *Info.pSamplesPerSec;
+	const int32 Bits = FMath::Max(8, static_cast<int32>(*Info.pBitsPerSample));
+	const float Duration = static_cast<float>(Info.SampleDataSize) / static_cast<float>(FMath::Max(1, SampleRate * Channels * (Bits / 8)));
+
+	TSharedRef<TArray<uint8>> Samples = MakeShared<TArray<uint8>>();
+	Samples->Append(Info.SampleDataStart, Info.SampleDataSize);
+	Pcm.Add(Name, Samples);
+
+	USoundWaveProcedural* Wave = NewObject<USoundWaveProcedural>(GetTransientPackage(), NAME_None, RF_Transient);
 	Wave->SetSampleRate(SampleRate);
 	Wave->NumChannels = Channels;
-	Wave->RawPCMDataSize = Info.SampleDataSize;
-	Wave->Duration = static_cast<float>(Info.SampleDataSize) / (SampleRate * Channels * (*Info.pBitsPerSample / 8));
-	Wave->RawPCMData = static_cast<uint8*>(FMemory::Malloc(Info.SampleDataSize));
-	FMemory::Memcpy(Wave->RawPCMData, Info.SampleDataStart, Info.SampleDataSize);
+	Wave->Duration = Duration;
 	Wave->bLooping = Path.Contains(TEXT("ambient"));
+	Wave->SoundGroup = SOUNDGROUP_Default;
+	Wave->bProcedural = true;
+	Wave->QueueAudio(Samples->GetData(), Samples->Num());
+	if (Wave->bLooping)
+	{
+		Wave->OnSoundWaveProceduralUnderflow.BindLambda([Samples](USoundWaveProcedural* Proc, int32)
+		{
+			if (Proc && Samples->Num() > 0)
+			{
+				Proc->QueueAudio(Samples->GetData(), Samples->Num());
+			}
+		});
+	}
 	Wave->AddToRoot();
 	return Wave;
 }

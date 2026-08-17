@@ -46,7 +46,7 @@ for (const rel of runtime) need(rel);
 
 if (existsSync(projectPath)) {
   const project = JSON.parse(readFileSync(projectPath, "utf8"));
-  if (project.EngineAssociation !== "5.5" && project.EngineAssociation !== "5.4") {
+  if (project.EngineAssociation !== "5.8") {
     fails.push(`EngineAssociation ${project.EngineAssociation}`);
   }
   if (!project.Modules?.some((m) => m.Name === "Aetheris")) fails.push("Aetheris module missing");
@@ -83,6 +83,14 @@ const hud = readFileSync(join(root, "Source/Aetheris/AetherisHUD.cpp"), "utf8");
 for (const key of ["ConsumeClick", "OpenCategory"]) {
   if (!hud.includes(key)) fails.push(`AetherisHUD.cpp missing ${key}`);
 }
+
+const target = readFileSync(join(root, "Source/Aetheris.Target.cs"), "utf8");
+if (!target.includes("Unreal5_8")) fails.push("Aetheris.Target.cs missing Unreal5_8");
+const editorTarget = readFileSync(join(root, "Source/AetherisEditor.Target.cs"), "utf8");
+if (!editorTarget.includes("Unreal5_8")) fails.push("AetherisEditor.Target.cs missing Unreal5_8");
+
+const assets = readFileSync(join(root, "Source/Aetheris/AetherisAssets.cpp"), "utf8");
+if (!assets.includes("USoundWaveProcedural")) fails.push("AetherisAssets.cpp missing USoundWaveProcedural");
 
 const catalog = readFileSync(join(root, "Source/Aetheris/Catalog.cpp"), "utf8");
 for (const id of ["cottage", "mill", "water", "road", "shop", "park", "bulldoze"]) {
