@@ -1,9 +1,11 @@
 #include "AetherisPawn.h"
 #include "AetherisHUD.h"
+#include "AetherisSettings.h"
 #include "AetherisWorld.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 
 AAetherisPawn::AAetherisPawn()
@@ -31,6 +33,7 @@ void AAetherisPawn::BeginPlay()
 		Mode.SetHideCursorDuringCapture(false);
 		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		PC->SetInputMode(Mode);
+		FAetherisSettings::Get().ApplyBindings(PC);
 	}
 }
 
@@ -60,11 +63,51 @@ void AAetherisPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	PlayerInputComponent->BindAction(TEXT("Tool5"), IE_Pressed, this, &AAetherisPawn::Tool5);
 	PlayerInputComponent->BindAction(TEXT("Tool6"), IE_Pressed, this, &AAetherisPawn::Tool6);
 	PlayerInputComponent->BindAction(TEXT("Tool7"), IE_Pressed, this, &AAetherisPawn::Tool7);
+	PlayerInputComponent->BindAction(TEXT("Settings"), IE_Pressed, this, &AAetherisPawn::ToggleSettingsMenu);
+}
+
+bool AAetherisPawn::MenuBlocks() const
+{
+	if (const AAetherisHUD* HUD = FindHUD()) return HUD->BlocksWorld();
+	return false;
+}
+
+bool AAetherisPawn::PollRebind()
+{
+	AAetherisHUD* HUD = FindHUD();
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!HUD || !PC || !HUD->IsListening()) return false;
+	if (PC->WasInputKeyJustPressed(EKeys::Escape))
+	{
+		HUD->CancelListen();
+		return true;
+	}
+	TArray<FKey> Keys;
+	EKeys::GetAllKeys(Keys);
+	for (const FKey& Key : Keys)
+	{
+		if (!Key.IsValid() || Key.IsAnalog() || Key == EKeys::MouseX || Key == EKeys::MouseY || Key == EKeys::MouseWheelAxis)
+		{
+			continue;
+		}
+		if (PC->WasInputKeyJustPressed(Key))
+		{
+			HUD->CaptureKey(Key);
+			return true;
+		}
+	}
+	return true;
 }
 
 void AAetherisPawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (PollRebind() || MenuBlocks())
+	{
+		MoveInput = FVector2D::ZeroVector;
+		ApplyCamera();
+		return;
+	}
 	const float Dist = FMath::Lerp(2200.f, 14000.f, ZoomAlpha);
 	const float Pan = Dist * 0.55f * DeltaSeconds;
 	const FRotator YawRot(0.f, Yaw, 0.f);
@@ -120,7 +163,7 @@ void AAetherisPawn::ApplyCamera()
 void AAetherisPawn::EdgeScroll(float DeltaSeconds)
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!PC || bRotating || bPanning) return;
+	if (!PC || bRotating || bPanning || !FAetherisSettings::Get().bEdgeScroll) return;
 	float MX, MY;
 	if (!PC->GetMousePosition(MX, MY)) return;
 	int32 SX = 0, SY = 0;
@@ -150,23 +193,28 @@ void AAetherisPawn::MoveRight(float Value) { MoveInput.X += Value; }
 
 void AAetherisPawn::Turn(float Value)
 {
-	if (bRotating) Yaw += Value * 1.8f;
+	if (MenuBlocks()) return;
+	if (bRotating) Yaw += Value * 1.8f * FAetherisSettings::Get().Sensitivity;
 }
 
 void AAetherisPawn::Look(float Value)
 {
-	if (bRotating) ZoomAlpha = FMath::Clamp(ZoomAlpha - Value * 0.012f, 0.f, 1.f);
+	if (MenuBlocks()) return;
+	const float Sign = FAetherisSettings::Get().bInvertY ? -1.f : 1.f;
+	if (bRotating) ZoomAlpha = FMath::Clamp(ZoomAlpha - Value * 0.012f * Sign * FAetherisSettings::Get().Sensitivity, 0.f, 1.f);
 }
 
 void AAetherisPawn::Zoom(float Value)
 {
+	if (MenuBlocks()) return;
 	ZoomAlpha = FMath::Clamp(ZoomAlpha - Value * 0.08f, 0.f, 1.f);
 }
 
-void AAetherisPawn::RotateLeft() { Yaw -= 45.f; }
-void AAetherisPawn::RotateRight() { Yaw += 45.f; }
+void AAetherisPawn::RotateLeft() { if (!MenuBlocks()) Yaw -= 45.f; }
+void AAetherisPawn::RotateRight() { if (!MenuBlocks()) Yaw += 45.f; }
 void AAetherisPawn::ResetView()
 {
+	if (MenuBlocks()) return;
 	Focus = FVector::ZeroVector;
 	Yaw = -45.f;
 	ZoomAlpha = 0.45f;
@@ -177,6 +225,7 @@ void AAetherisPawn::PlacePressed()
 	if (AAetherisHUD* HUD = FindHUD())
 	{
 		if (HUD->ConsumeClick()) return;
+		if (HUD->BlocksWorld()) return;
 	}
 	bPainting = true;
 	LastPaint = FIntPoint(INDEX_NONE, INDEX_NONE);
@@ -194,18 +243,25 @@ void AAetherisPawn::PlacePressed()
 }
 
 void AAetherisPawn::PlaceReleased() { bPainting = false; }
-void AAetherisPawn::RotatePressed() { bRotating = true; }
+void AAetherisPawn::RotatePressed() { if (!MenuBlocks()) bRotating = true; }
 void AAetherisPawn::RotateReleased() { bRotating = false; }
-void AAetherisPawn::PanPressed() { bPanning = true; }
+void AAetherisPawn::PanPressed() { if (!MenuBlocks()) bPanning = true; }
 void AAetherisPawn::PanReleased() { bPanning = false; }
 
 void AAetherisPawn::RazeHotkey()
 {
+	if (MenuBlocks()) return;
 	if (AAetherisWorld* Vale = FindWorld()) Vale->SetTool(TEXT("bulldoze"));
+}
+
+void AAetherisPawn::ToggleSettingsMenu()
+{
+	if (AAetherisHUD* HUD = FindHUD()) HUD->ToggleSettings();
 }
 
 void AAetherisPawn::TogglePause()
 {
+	if (MenuBlocks()) return;
 	if (AAetherisWorld* Vale = FindWorld())
 	{
 		Vale->bPaused = !Vale->bPaused;
@@ -215,6 +271,7 @@ void AAetherisPawn::TogglePause()
 
 void AAetherisPawn::ToolHotkey(int32 Index)
 {
+	if (MenuBlocks()) return;
 	AAetherisWorld* Vale = FindWorld();
 	if (!Vale) return;
 	const FName Tools[] = { NAME_None, TEXT("road"), TEXT("cottage"), TEXT("mill"), TEXT("water"), TEXT("shop"), TEXT("park"), TEXT("workshop") };

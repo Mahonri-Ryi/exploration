@@ -28,8 +28,12 @@ The editor is not in the cloud agent environment. Play this on the machine where
 | 1–7 | Avenue, Cottage, Windmill, Water Tower, Boutique, Park, Workshop |
 | X | Raze tool |
 | Space | Pause sim |
+| Esc or F10 | Settings (graphics, sound, key bindings) |
+| Settings button | Top-right of the HUD |
 
 Click a card on the construction dock, then click-drag across tiles. Roads snap markings to neighbors. Hover ghost turns teal when the plot is legal and red when it is not.
+
+**Settings** (Esc, F10, or the top-right button) has Graphics, Sound, Controls, and Game tabs. Quality, window mode, resolution scale, VSync, frame cap, volumes, key rebinds, edge scroll, and invert orbit save to `Saved/Config/AetherisUser.ini` and apply immediately.
 
 ## Look and sound
 
