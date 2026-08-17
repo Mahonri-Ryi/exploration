@@ -8,7 +8,7 @@ This is the real game. The browser build is a sketch.
 
 1. Install [Unreal Engine 5.8](https://www.unrealengine.com/download) and Visual Studio 2022 with **Game development with C++** (5.8 needs a current MSVC v143 toolset).
 2. Open `Unreal/Aetheris/Aetheris.uproject` (associated with 5.8) and let it compile the C++ modules.
-3. Press **Play**. Textures and WAV SFX load from `Unreal/Aetheris/Content/Runtime` — no Content Browser import step.
+3. In the editor, use **File → New Level → Empty Level** if you see a stock landscape, then press the green **Play** button (Alt+P). The gold AETHERIS bar and building dock are the game. The landscape in the viewport is only the editor, not Aetheris.
 
 Cities-style camera: **WASD** / edge scroll pan, **Q/E** rotate, **RMB** orbit, **MMB** pan, wheel zoom, **R** reset. Bottom dock picks tools; click-drag paints roads or razes. **1–7** hotkeys, **X** raze, **Space** pause. **Esc** or the **Settings** button opens graphics, sound, and key bindings. Full notes: [`Unreal/Aetheris/README.md`](Unreal/Aetheris/README.md).
 

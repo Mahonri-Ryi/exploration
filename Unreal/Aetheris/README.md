@@ -1,6 +1,16 @@
 # Aetheris for Unreal Engine 5
 
-This is the **native** city builder. Open `Aetheris.uproject` in **Unreal Engine 5.8**, compile, and press **Play**. The vale, lighting, HUD, textures, and sound load at runtime — you do not need to import `.uasset` art first.
+This is the **native** city builder. Opening the `.uproject` only starts the **Unreal Editor**. The game is not the default landscape you see in the viewport.
+
+## Play the game (in the editor)
+
+1. Pull latest `main` and open `Unreal/Aetheris/Aetheris.uproject`.
+2. If the viewport is a huge empty landscape: **File → New Level → Empty Level** (not Open World). Click **Create**.
+3. Press the green **Play** button in the top toolbar, or **Alt+P**. Do not use Simulate.
+4. You should see a gold **AETHERIS** bar, a **Settings** button, and a building dock along the bottom. That is the game.
+5. Click a dock card, then click-drag on the vale to place. **Esc** opens settings.
+
+The city, lighting, HUD, and sound spawn from C++ when Play starts. There is no separate cooked “game map” to open first.
 
 The editor is not in the cloud agent environment. Play this on the machine where you installed 5.8.
 
