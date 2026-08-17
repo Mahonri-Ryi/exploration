@@ -68,6 +68,7 @@ for (const key of [
   "r.SkyAtmosphere=1",
   "r.VolumetricCloud=1",
   "AetherisGameMode",
+  "Template_Default",
 ]) {
   if (!engine.includes(key)) fails.push(`DefaultEngine.ini missing ${key}`);
 }
