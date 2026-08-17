@@ -1,39 +1,51 @@
 # Aetheris for Unreal Engine 5
 
-This is the **native** city builder. The browser prototype cannot do Lumen, Nanite, virtual shadow maps, or a real sky atmosphere. This project can.
+This is the **native** city builder. Open `Aetheris.uproject` in Unreal 5.5, compile, and press **Play**. The vale, lighting, HUD, textures, and sound load at runtime — you do not need to import `.uasset` art first.
 
-The editor is not in the cloud agent environment (UE5 is a large local install). Open this folder on a machine that has **Unreal Engine 5.4 or 5.5**.
+The editor is not in the cloud agent environment. Play this on the machine where you are installing Unreal.
 
 ## Open and play
 
-1. Install [Unreal Engine 5.5](https://www.unrealengine.com/download) (5.4 works if you change `EngineAssociation` in `Aetheris.uproject` and `IncludeOrderVersion` in the two `*.Target.cs` files to `Unreal5_4`).
+1. Install [Unreal Engine 5.5](https://www.unrealengine.com/download). 5.4 or 5.6 also work if you change `EngineAssociation` in `Aetheris.uproject` and `IncludeOrderVersion` in the two `*.Target.cs` files (`Unreal5_4` / `Unreal5_5` / `Unreal5_6`).
 2. Double-click `Unreal/Aetheris/Aetheris.uproject`.
 3. If asked to rebuild modules, click **Yes**.
-4. Press **Play**. The vale, river, sky, and lighting spawn from C++ — you do not need a cooked Content map first.
-5. Optional: **File → New Level → Open World**, save as `Content/Maps/Vale`, then set it as the editor startup map. GameMode still builds the city on BeginPlay.
+4. Press **Play**. GameMode spawns the vale on BeginPlay, so any empty level works.
+5. Optional: **File → New Level → Open World**, save as `Content/Maps/Vale`, then set it as the editor startup map.
 
-## Controls
+## Controls (Cities-style)
 
 | Input | Action |
 | --- | --- |
-| WASD | Pan |
-| Middle mouse | Orbit |
-| Wheel | Zoom |
-| Left click | Place current tool |
-| Right click | Raze |
-| Space | Pause sim |
+| WASD / arrows | Pan |
+| Mouse at screen edge | Edge scroll |
+| Q / E | Rotate 45° |
+| Right mouse | Orbit (yaw + pitch/zoom) |
+| Middle mouse | Drag-pan |
+| Wheel | Zoom (distance, pitch, FOV) |
+| R or Home | Reset camera |
+| Left click / drag | Place or paint the current tool |
+| Dock tabs + cards | Pick category and building |
 | 1–7 | Avenue, Cottage, Windmill, Water Tower, Boutique, Park, Workshop |
+| X | Raze tool |
+| Space | Pause sim |
 
-## What is using the UE5 stack
+Click a card on the construction dock, then click-drag across tiles. Roads snap markings to neighbors. Hover ghost turns teal when the plot is legal and red when it is not.
 
-- Lumen global illumination and reflections (`r.DynamicGlobalIlluminationMethod=1`)
-- Virtual shadow maps
-- Sky atmosphere + real-time sky light + volumetric clouds and fog
-- Auto-exposure, bloom, and a cinematic post volume
-- Procedural terrain and water, lit materials, moving sun
+## Look and sound
 
-Buildings are runtime meshes so the project compiles without binary `.uasset` art. Replace them with Nanite Megascans or Kitbash kits in the editor when you want film meshes — the sim and placement stay the same.
+- Lumen GI + reflections, virtual shadow maps, sky atmosphere, volumetric clouds and fog
+- Runtime PBR-ish textures in `Content/Runtime/Textures` (photo grass/asphalt plus brick, plaster, stone, roof, water, windows)
+- 48 kHz stereo WAV SFX and looping day/night beds in `Content/Runtime/Audio`
+- Distinct silhouettes for homes, shops, works, civic, and wonders
+
+Rebuild those files after changing the web library:
+
+```bash
+npm run ue-assets
+```
+
+Replace the runtime meshes with Nanite Megascans or Kitbash kits in the editor when you want film assets — the sim and placement stay the same.
 
 ## Web prototype
 
-The Three.js game at the repo root is still there for a quick browser sketch. It is not the graphics target anymore.
+The Three.js game at the repo root is still there for a quick browser sketch. It is not the graphics target.

@@ -15,7 +15,9 @@ public class Aetheris : ModuleRules
 			"ProceduralMeshComponent",
 			"UMG",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"ImageWrapper",
+			"AudioMixer"
 		});
 	}
 }
