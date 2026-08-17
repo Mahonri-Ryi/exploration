@@ -18,7 +18,15 @@ That popup is Unreal failing to create the Visual Studio files for this C++ proj
 
 1. Install **Visual Studio 2022** with the **Game development with C++** workload, the latest **MSVC v143** toolset, and the **Windows 10/11 SDK**. UE 5.8 will not generate project files without that.
 2. Pull latest `main`, then open `Aetheris.uproject` again. If Version Selector asks, pick **5.8**. Prefer **More Options → convert in-place**, not **Open a copy**.
-3. To see the real error, run `Unreal/Aetheris/GenerateProjectFiles.bat` or open `%LOCALAPPDATA%\UnrealBuildTool\Log.txt`.
+3. To see the real error, run `Unreal/Aetheris/GenerateProjectFiles.bat` or open `%LOCALAPPDATA%\UnrealBuildTool\Log_GPF.txt`.
+
+### `'0xFF' is an invalid start of a value` in Aetheris.uproject
+
+Unreal is reading the `.uproject` as UTF-16 (Windows Unicode). The file must be UTF-8 JSON with no BOM.
+
+1. Double-click `Unreal/Aetheris/RepairUProject.bat`, or pull latest `main`.
+2. Open `Aetheris.uproject` again. Do not save it from Notepad as **Unicode**.
+3. If Convert Project appears, use **More Options → convert in-place**.
 
 ## Controls (Cities-style)
 

@@ -46,7 +46,14 @@ const runtime = [
 for (const rel of runtime) need(rel);
 
 if (existsSync(projectPath)) {
-  const project = JSON.parse(readFileSync(projectPath, "utf8"));
+  const raw = readFileSync(projectPath);
+  if (raw[0] === 0xff || raw[0] === 0xfe || (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf)) {
+    fails.push("Aetheris.uproject has a BOM; Unreal 5.8 needs UTF-8 JSON with no BOM");
+  }
+  if ([...raw].some((b) => b > 127)) {
+    fails.push("Aetheris.uproject must be ASCII-only so Windows does not rewrite it as UTF-16");
+  }
+  const project = JSON.parse(raw.toString("utf8"));
   if (project.EngineAssociation !== "5.8") {
     fails.push(`EngineAssociation ${project.EngineAssociation}`);
   }
