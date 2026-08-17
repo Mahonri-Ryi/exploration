@@ -1,8 +1,8 @@
 {
   "FileVersion": 3,
-  "EngineAssociation": "5.5",
+  "EngineAssociation": "5.8",
   "Category": "Games",
-  "Description": "Aetheris — native Unreal Engine 5 city builder (Lumen, VSM, sky atmosphere).",
+  "Description": "Aetheris — native Unreal Engine 5.8 city builder (Lumen, VSM, sky atmosphere).",
   "Modules": [
     {
       "Name": "Aetheris",

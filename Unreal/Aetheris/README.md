@@ -1,16 +1,16 @@
 # Aetheris for Unreal Engine 5
 
-This is the **native** city builder. Open `Aetheris.uproject` in Unreal 5.5, compile, and press **Play**. The vale, lighting, HUD, textures, and sound load at runtime — you do not need to import `.uasset` art first.
+This is the **native** city builder. Open `Aetheris.uproject` in **Unreal Engine 5.8**, compile, and press **Play**. The vale, lighting, HUD, textures, and sound load at runtime — you do not need to import `.uasset` art first.
 
-The editor is not in the cloud agent environment. Play this on the machine where you are installing Unreal.
+The editor is not in the cloud agent environment. Play this on the machine where you installed 5.8.
 
 ## Open and play
 
-1. Install [Unreal Engine 5.5](https://www.unrealengine.com/download). 5.4 or 5.6 also work if you change `EngineAssociation` in `Aetheris.uproject` and `IncludeOrderVersion` in the two `*.Target.cs` files (`Unreal5_4` / `Unreal5_5` / `Unreal5_6`).
-2. Double-click `Unreal/Aetheris/Aetheris.uproject`.
-3. If asked to rebuild modules, click **Yes**.
-4. Press **Play**. GameMode spawns the vale on BeginPlay, so any empty level works.
-5. Optional: **File → New Level → Open World**, save as `Content/Maps/Vale`, then set it as the editor startup map.
+1. Install [Unreal Engine 5.8](https://www.unrealengine.com/download) plus Visual Studio 2022 with **Game development with C++**. 5.8 wants a current MSVC v143 toolset — if the first compile fails on the toolchain, install the latest VS 2022 C++ build tools and retry.
+2. Double-click `Unreal/Aetheris/Aetheris.uproject`. If Version Selector asks, pick **5.8**.
+3. If asked to rebuild modules, click **Yes**. First compile takes a few minutes.
+4. Press **Play**. GameMode spawns the vale on BeginPlay, so any empty level works. If the default Open World template map is missing, use **File → New Level → Empty Open World** (or Empty Level) and Play there.
+5. Optional: save that level as `Content/Maps/Vale` and set it as the editor startup map.
 
 ## Controls (Cities-style)
 
