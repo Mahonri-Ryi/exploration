@@ -47,7 +47,10 @@ protected:
 	void PanReleased();
 	void RazeHotkey();
 	void TogglePause();
+	void ToggleSettingsMenu();
 	void ToolHotkey(int32 Index);
+	bool MenuBlocks() const;
+	bool PollRebind();
 	void Tool1() { ToolHotkey(1); }
 	void Tool2() { ToolHotkey(2); }
 	void Tool3() { ToolHotkey(3); }

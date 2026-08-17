@@ -21,6 +21,7 @@ need("Source/Aetheris/AetherisGameMode.cpp");
 need("Source/Aetheris/AetherisPawn.cpp");
 need("Source/Aetheris/AetherisAssets.cpp");
 need("Source/Aetheris/AetherisAudio.cpp");
+need("Source/Aetheris/AetherisSettings.cpp");
 need("README.md");
 
 const runtime = [
@@ -65,7 +66,7 @@ for (const key of [
 }
 
 const input = readFileSync(join(root, "Config/DefaultInput.ini"), "utf8");
-for (const key of ["RotateLeft", "RotateRight", "ResetCamera", "RazeHotkey", "CaptureDuringMouseDown"]) {
+for (const key of ["RotateLeft", "RotateRight", "ResetCamera", "RazeHotkey", "CaptureDuringMouseDown", "Settings"]) {
   if (!input.includes(key)) fails.push(`DefaultInput.ini missing ${key}`);
 }
 
@@ -80,7 +81,7 @@ for (const key of ["EdgeScroll", "RotateLeft", "bPainting"]) {
 }
 
 const hud = readFileSync(join(root, "Source/Aetheris/AetherisHUD.cpp"), "utf8");
-for (const key of ["ConsumeClick", "OpenCategory"]) {
+for (const key of ["ConsumeClick", "OpenCategory", "DrawSettings", "ToggleSettings"]) {
   if (!hud.includes(key)) fails.push(`AetherisHUD.cpp missing ${key}`);
 }
 
