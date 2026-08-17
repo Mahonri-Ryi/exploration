@@ -3,6 +3,7 @@
 #include "AetherisSettings.h"
 #include "AetherisWorld.h"
 #include "Camera/CameraComponent.h"
+#include "Engine/EngineTypes.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
@@ -297,7 +298,7 @@ bool AAetherisPawn::TraceCursor(FVector& Out) const
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return false;
 	FHitResult Hit;
-	if (PC->GetHitResultUnderCursorByChannel(ECC_Visibility, true, Hit))
+	if (PC->GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECC_Visibility), true, Hit))
 	{
 		Out = Hit.ImpactPoint;
 		return true;
