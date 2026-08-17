@@ -239,19 +239,19 @@ void AAetherisWorld::SpawnWildTrees()
 	}
 }
 
-void AAetherisWorld::AttachMesh(AActor* Owner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough, float Metal, FName TexName)
+void AAetherisWorld::AttachMesh(AActor* MeshOwner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough, float Metal, FName TexName)
 {
-	if (!Owner || !Mesh) return;
-	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+	if (!MeshOwner || !Mesh) return;
+	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(MeshOwner);
 	Comp->SetStaticMesh(Mesh);
 	Comp->SetRelativeLocation(Rel);
 	Comp->SetRelativeScale3D(Scale);
 	Comp->SetMaterial(0, FAetherisAssets::Get().MakeLit(this, Color, Rough, Metal, FAetherisAssets::Get().Tex(TexName)));
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetCastShadow(true);
-	Comp->SetupAttachment(Owner->GetRootComponent());
+	Comp->SetupAttachment(MeshOwner->GetRootComponent());
 	Comp->RegisterComponent();
-	Owner->AddInstanceComponent(Comp);
+	MeshOwner->AddInstanceComponent(Comp);
 }
 
 AActor* AAetherisWorld::SpawnBuilding(int32 X, int32 Y, const FBuildingDef& Def)
