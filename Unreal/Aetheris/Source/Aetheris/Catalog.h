@@ -20,11 +20,21 @@ struct FBuildingDef
 	bool bRoad = false;
 	bool bWaterfront = false;
 	bool bUnique = false;
+	FName Category = TEXT("civic");
+	int32 Hotkey = 0;
+};
+
+struct FToolCategory
+{
+	FName Id;
+	FString Label;
+	TArray<FName> Tools;
 };
 
 namespace AetherisCatalog
 {
 	const TArray<FBuildingDef>& All();
 	const FBuildingDef* Find(FName Id);
+	const TArray<FToolCategory>& Categories();
 	bool IsWaterTile(int32 X, int32 Y, int32 Size);
 }

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "smoke": "node scripts/smoke-browser.mjs",
     "unreal:check": "node scripts/check-unreal.mjs",
-    "audio": "python3 scripts/generate-audio.py"
+    "audio": "python3 scripts/generate-audio.py",
+    "ue-assets": "python3 scripts/generate-ue-assets.py"
   },
   "dependencies": {
     "three": "^0.170.0"

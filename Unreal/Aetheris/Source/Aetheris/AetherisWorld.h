@@ -1,14 +1,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "AetherisAudio.h"
 #include "CitySim.h"
+#include "GameFramework/Actor.h"
 #include "AetherisWorld.generated.h"
 
 class UProceduralMeshComponent;
 class UStaticMesh;
-class UMaterialInterface;
 class UMaterialInstanceDynamic;
+class AAetherisProp;
 
 UCLASS()
 class AETHERIS_API AAetherisWorld : public AActor
@@ -25,6 +26,7 @@ public:
 	FName CurrentTool = TEXT("road");
 	FString LastMessage;
 	bool bPaused = false;
+	bool bRazeMode = false;
 
 	bool TryPlaceAt(const FVector& WorldPos);
 	bool TryRazeAt(const FVector& WorldPos);
@@ -32,8 +34,10 @@ public:
 	FVector TileToWorld(int32 X, int32 Y, float ExtraZ = 0.f) const;
 	void RebuildTile(int32 X, int32 Y);
 	void SetTool(FName Id);
+	void UpdateHover(const FVector& WorldPos);
 
 	static constexpr float TileSize = 400.f;
+	FAetherisAudio Audio;
 
 protected:
 	UPROPERTY()
@@ -44,6 +48,9 @@ protected:
 
 	UPROPERTY()
 	TMap<FIntPoint, TObjectPtr<AActor>> TileActors;
+
+	UPROPERTY()
+	TObjectPtr<AAetherisProp> HoverTile;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> CubeMesh;
@@ -61,9 +68,9 @@ protected:
 	void BuildLandscape();
 	void SpawnWildTrees();
 	AActor* SpawnBuilding(int32 X, int32 Y, const FBuildingDef& Def);
-	UMaterialInstanceDynamic* MakeLit(const FLinearColor& Color, float Roughness, float Metallic);
+	void AttachMesh(AActor* Owner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough = 0.7f, float Metal = 0.05f, FName TexName = NAME_None);
 	float HeightAt(int32 X, int32 Y) const;
-	void AttachMesh(AActor* Owner, UStaticMesh* Mesh, const FVector& Rel, const FVector& Scale, const FLinearColor& Color, float Rough = 0.7f, float Metal = 0.05f);
+	void RefreshRoadNeighbors(int32 X, int32 Y);
 
 	FTimerHandle SimTimer;
 	void OnSimTick();
